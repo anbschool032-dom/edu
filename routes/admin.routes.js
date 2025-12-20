@@ -1,111 +1,75 @@
+// // routes/admin.routes.js
 // const express = require('express');
 // const router = express.Router();
 // const adminController = require('../controllers/admin.controller');
 // const authMiddleware = require('../middleware/auth.middleware');
 
-// // =======================
-// // INDUSTRY ROUTES
-// // =======================
-// router.get('/industry', (req, res, next) => {
-//   console.log('✅ HIT /industry');
-//   next();
-// }, adminController.getIndustries);
+// // ✅ Protect ALL admin routes
+// router.use(authMiddleware(['admin']));
 
+// // Dashboard
+// router.get('/dashboard', adminController.getFullDashboard);
+
+// // Industry
 // router.get('/industry', adminController.getIndustries);
 // router.post('/industry', adminController.createIndustry);
 // router.put('/industry/:id', adminController.updateIndustry);
 // router.delete('/industry/:id', adminController.deleteIndustry);
 
-// // =======================
-// // POSITION ROUTES
-// // =======================
+// // Position
 // router.get('/position', adminController.getPositions);
-
-// router.post(
-//   '/position',
-//   adminController.upload.single('image_position'),
-//   adminController.createPosition
-// );
-
-// router.put(
-//   '/position/:id',
-//   adminController.upload.single('image_position'),
-//   adminController.updatePosition
-// );
-
+// router.post('/position', adminController.uploadPosition.single('image_position'), adminController.createPosition);
+// router.put('/position/:id', adminController.uploadPosition.single('image_position'), adminController.updatePosition);
 // router.delete('/position/:id', adminController.deletePosition);
 
-// // =======================
-// // OTHER ADMIN ROUTES
-// // =======================
-// router.post('/create-initial-admin', adminController.createInitialAdmin);
-// // router.post('/review-mentor', adminController.reviewMentor);
-// router.patch(
-//   '/mentors/:mentorId/review',
-//   adminController.reviewMentor
-// );
-
-// router.get('/mentors/pending', adminController.listPendingMentors);
-
-// // router.post(
-// //   '/create-user',
-// //   adminController.upload.single('profile_image'),
-// //   adminController.createRole
-// // );
-
-
-
-// router.post(
-//   '/create-user',
-//   authMiddleware,                     // ✅ attach logged-in user
-//   adminController.upload.single('profile_image'),
-//   adminController.createRole
-// );
-
-
-// router.get('/users', adminController.getAllUsers);
+// // Mentors
 // router.get('/mentors/stats', adminController.getMentorStats);
+// router.get('/mentors/pending', adminController.listPendingMentors);
+// router.patch('/mentors/:mentorId/review', adminController.reviewMentor);
+
+// // Users
+// router.get('/users', adminController.getAllUsers);
+// router.post('/create-user', adminController.upload.single('profile_image'), adminController.createRole);
 
 // module.exports = router;
 
 
 
+// routes/admin.routes.js
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 
-// Apply auth and role check to all admin routes
+// ✅ Protect ALL admin routes
 router.use(authMiddleware(['admin']));
 
-router.post('/create-initial-admin', adminController.createInitialAdmin);
+// Profile Update (Matches frontend: /admin/profile/update)
+router.put('/profile/update', adminController.upload.single('profile_image'), adminController.updateProfile); // ✅ Added
+
+// Dashboard
+router.get('/dashboard', adminController.getFullDashboard);
+
+// ... (Rest of your routes: Industry, Position, Mentors, Users) ...
+// Industry
 router.get('/industry', adminController.getIndustries);
 router.post('/industry', adminController.createIndustry);
 router.put('/industry/:id', adminController.updateIndustry);
 router.delete('/industry/:id', adminController.deleteIndustry);
 
+// Position
 router.get('/position', adminController.getPositions);
-router.post(
-  '/position',
-  adminController.upload.single('image_position'),
-  adminController.createPosition
-);
-router.put(
-  '/position/:id',
-  adminController.upload.single('image_position'),
-  adminController.updatePosition
-);
+router.post('/position', adminController.upload.single('image_position'), adminController.createPosition); // Note: check if you exported uploadPosition or just upload in controller
+router.put('/position/:id', adminController.upload.single('image_position'), adminController.updatePosition);
 router.delete('/position/:id', adminController.deletePosition);
 
-router.patch('/mentors/:mentorId/review', adminController.reviewMentor);
-router.get('/mentors/pending', adminController.listPendingMentors);
+// Mentors
 router.get('/mentors/stats', adminController.getMentorStats);
+router.get('/mentors/pending', adminController.listPendingMentors);
+router.patch('/mentors/:mentorId/review', adminController.reviewMentor);
 
-router.post(
-  '/create-user',
-  adminController.upload.single('profile_image'),
-  adminController.createRole
-);
+// Users
 router.get('/users', adminController.getAllUsers);
+router.post('/create-user', adminController.upload.single('profile_image'), adminController.createRole);
 
 module.exports = router;

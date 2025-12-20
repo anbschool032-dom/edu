@@ -1,9 +1,6 @@
-// // // carrear-server/server.js
 // // const express = require('express');
-// // const bodyParser = require('body-parser');
 // // const cookieParser = require('cookie-parser');
 // // const cors = require('cors');
-// // const db = require('./config/database');
 // // require('dotenv').config();
 
 // // const authRoutes = require('./routes/auth.routes');
@@ -13,262 +10,239 @@
 // // const app = express();
 // // const PORT = process.env.PORT || 3000;
 
-// // // Optional: increase max listeners if you saw warnings
-// // process.setMaxListeners(20);
-
-// // // Middleware Setup
-// // app.use(cookieParser());
-// // app.use(bodyParser.json());
-// // app.use(cors({
-// //     origin: [process.env.CLIENT_BASE_URL_PUBLIC, process.env.CLIENT_BASE_URL_ADMIN].filter(Boolean),
-// //     credentials: true,
-// // }));
-
+// // // 🔥 CORS (THIS ALONE IS ENOUGH)
 // // app.use(cors({
 // //   origin: ['http://localhost:5173', 'http://localhost:5174'],
-// //   credentials: true, // Allow sending cookies
-// //   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-// //   allowedHeaders: ['Content-Type','Authorization']
+// //   credentials: true,
+// //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+// //   allowedHeaders: ['Content-Type', 'Authorization']
 // // }));
+
+// // // Middleware
+// // app.use(cookieParser());
+// // app.use(express.json());
+// // app.use(express.urlencoded({ extended: true }));
 
 // // // Routes
 // // app.use('/api/v1/auth', authRoutes);
 // // app.use('/api/v1/mentors', mentorRoutes);
 // // app.use('/api/v1/admin', adminRoutes);
 
-// // // app.use('/api/v1', industryRoutes); // /api/v1/industries
-// // // app.use('/api/v1', positionRoutes); // /api/v1/positions
-
-
-// // // General health check
+// // // Health check
 // // app.get('/', (req, res) => {
-// //     res.send('CareerSync Server Running!');
+// //   res.send('CareerSync Server Running!');
 // // });
 
-// // // Centralized error handler
-// // const errorHandler = (err, req, res, next) => {
-// //     console.error('Unhandled error:', err && (err.stack || err));
-// //     const status = (err && err.status) || 500;
-// //     const message = (err && err.message) || 'Internal Server Error';
-// //     res.status(status).json({ message });
-// // };
-// // app.use(errorHandler);
+// // // Error handler
+// // app.use((err, req, res, next) => {
+// //   console.error(err);
+// //   res.status(500).json({ message: 'Internal Server Error' });
+// // });
 
 // // app.listen(PORT, () => {
-// //     console.log(`Server running on http://localhost:${PORT}`);
+// //   console.log(`✅ Server running on http://localhost:${PORT}`);
 // // });
 
 
 
-
-// // require('dotenv').config();
-
-
-
-
-
-
-
-
-// // // console.log('🔥 DB_HOST:', process.env.DB_HOST);
-// // // console.log('🔥 DB_NAME:', process.env.DB_NAME);
-// // // console.log('🔥 DB_USER:', process.env.DB_USER);
-
-
-// // // // Test database connection
-// // // app.get('/db-test', async (req, res) => {
-// // //   try {
-// // //     const result = await db.query('SELECT NOW()');
-// // //     res.json({
-// // //       success: true,
-// // //       time: result.rows[0].now,
-// // //     });
-// // //   } catch (err) {
-// // //     console.error(err);
-// // //     res.status(500).json({
-// // //       success: false,
-// // //       error: err.message,
-// // //     });
-// // //   }
-// // // });
-
-
-
-// // // carrear-server/server.js
-// // const express = require('express');
-// // const bodyParser = require('body-parser');
-// // const cookieParser = require('cookie-parser');
-// // const cors = require('cors');
-// // const db = require('./config/database');
-// // require('dotenv').config();
-
-// // const authRoutes = require('./routes/auth.routes');
-// // const mentorRoutes = require('./routes/mentor.routes');
-// // const adminRoutes = require('./routes/admin.routes');
-// // // --- FIX 1: Import the new route files ---
-// // const industryRoutes = require('./routes/industry.routes');
-// // const positionRoutes = require('./routes/position.routes');
-
-// // const app = express();
-// // const PORT = process.env.PORT || 3000;
-
-// // // Optional: increase max listeners if you saw warnings
-// // process.setMaxListeners(20);
-
-// // // Middleware Setup
-// // app.use(cookieParser());
-// // app.use(bodyParser.json());
-// // app.use(cors({
-// //     origin: [process.env.CLIENT_BASE_URL_PUBLIC, process.env.CLIENT_BASE_URL_ADMIN].filter(Boolean),
-// //     credentials: true,
-// // }));
-
-// // app.use(cors({
-// //   origin: ['http://localhost:5173', 'http://localhost:5174'],
-// //   credentials: true, // Allow sending cookies
-// //   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-// //   allowedHeaders: ['Content-Type','Authorization']
-// // }));
-
-// // // Routes
-// // app.use('/api/v1/auth', authRoutes);
-// // app.use('/api/v1/mentors', mentorRoutes);
-// // app.use('/api/v1/admin', adminRoutes);
-
-// // // --- FIX 2: Mount the new routes under /api/v1 ---
-// // app.use('/api/v1', industryRoutes); 
-// // app.use('/api/v1', positionRoutes);
-
-// // // General health check
-// // app.get('/', (req, res) => {
-// //     res.send('CareerSync Server Running!');
-// // });
-
-// // // Centralized error handler
-// // const errorHandler = (err, req, res, next) => {
-// //     console.error('Unhandled error:', err && (err.stack || err));
-// //     const status = (err && err.status) || 500;
-// //     const message = (err && err.message) || 'Internal Server Error';
-// //     res.status(status).json({ message });
-// // };
-// // app.use(errorHandler);
-
-// // app.listen(PORT, () => {
-// //     console.log(`Server running on http://localhost:${PORT}`);
-// // });
-
-
-
+// // server.js
 // const express = require('express');
-// const bodyParser = require('body-parser');
 // const cookieParser = require('cookie-parser');
 // const cors = require('cors');
-// const db = require('./config/database'); // Assuming this is needed for database setup/check
+// const path = require('path');
 // require('dotenv').config();
 
-// // --- Import all route handlers ---
-// const authRoutes = require('./routes/auth.routes'); 
-// const mentorRoutes = require('./routes/mentor.routes');
+// // Import database (Sequelize)
+// const sequelize = require('./config/database');
+
+// // Import routes
+// const authRoutes = require('./routes/auth.routes');
 // const adminRoutes = require('./routes/admin.routes');
-// // const industryRoutes = require('./routes/industry.routes'); // <-- Added
-// // const positionRoutes = require('./routes/position.routes'); // <-- Added
+// const mentorRoutes = require('./routes/mentor.routes');
+// // Add more routes here if you have user/student routes later
 
 // const app = express();
 // const PORT = process.env.PORT || 3000;
 
-// // Optional: increase max listeners if you saw warnings
-// process.setMaxListeners(20);
+// // ========================
+// // Middleware
+// // ========================
 
-// // Middleware Setup
-// app.use(cookieParser());
-// app.use(bodyParser.json());
-
-// // CORS Configuration (Use the more permissive one provided in your initial snippet)
+// // CORS - Allow your frontend(s)
 // app.use(cors({
-//   origin: ['http://localhost:5173', 'http://localhost:5174'],
-//   credentials: true, // Allow sending cookies
-//   methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-//   allowedHeaders: ['Content-Type','Authorization']
+//   origin: [
+//     'http://localhost:5173',  // Admin panel
+//     'http://localhost:5174',  // Public site (if separate)
+//     // Add your production domains later
+//   ],
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
 // }));
-// // app.options('*', cors());
 
-// // // Body parsers AFTER cors
-// // app.use(express.json());
-// // app.use(express.urlencoded({ extended: true }));
+// // Body parsers
+// app.use(express.json({ limit: '10mb' }));
+// app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// // --- Routes Configuration (The fix for 404s) ---
+// // Cookie parser
+// app.use(cookieParser());
 
-// app.get('/api/v1/test', (req, res) => {
-//   res.json({ message: 'API OK' });
-// });
+// // Serve uploaded files statically
+// app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// // ========================
+// // Routes
+// // ========================
 
 // app.use('/api/v1/auth', authRoutes);
-// app.use('/api/v1/mentors', mentorRoutes);
 // app.use('/api/v1/admin', adminRoutes);
-// // app.use('/api/v1/', adminRoutes);
+// app.use('/api/v1/mentors', mentorRoutes);
 
 
-// // General health check
-// app.get('/', (req, res) => {
-//     res.send('CareerSync Server Running!');
+// // ========================
+// // Health Check & Root
+// // ========================
+
+// app.get('/api/health', (req, res) => {
+//   res.json({
+//     status: 'OK',
+//     message: 'CareerSync API is running!',
+//     timestamp: new Date().toISOString(),
+//     environment: process.env.NODE_ENV || 'development'
+//   });
 // });
 
-// // Centralized error handler
-// const errorHandler = (err, req, res, next) => {
-//     console.error('Unhandled error:', err && (err.stack || err));
-//     const status = (err && err.status) || 500;
-//     const message = (err && err.message) || 'Internal Server Error';
-//     res.status(status).json({ message });
+// app.get('/', (req, res) => {
+//   res.json({
+//     message: 'Welcome to CareerSync API 🎯',
+//     version: '1.0.0',
+//     docs: '/api/health'
+//   });
+// });
+
+// // ========================
+// // 404 Handler
+// // ========================
+
+// // app.use('/*', (req, res) => {
+// //   res.status(404).json({
+// //     error: 'Route not found',
+// //     path: req.originalUrl
+// //   });
+// // });
+
+// // ========================
+// // Global Error Handler
+// // ========================
+
+// app.use((err, req, res, next) => {
+//   console.error('🔥 Unhandled Error:', err);
+
+//   // Handle Sequelize validation errors
+//   if (err.name === 'SequelizeValidationError') {
+//     return res.status(400).json({
+//       message: 'Validation error',
+//       errors: err.errors.map(e => e.message)
+//     });
+//   }
+
+//   // Handle multer errors (file upload)
+//   if (err instanceof require('multer').MulterError) {
+//     return res.status(400).json({ message: `File upload error: ${err.message}` });
+//   }
+
+//   res.status(err.status || 500).json({
+//     message: err.message || 'Internal Server Error',
+//     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+//   });
+// });
+
+// // ========================
+// // Start Server
+// // ========================
+
+// const startServer = async () => {
+//   try {
+//     // Test DB connection
+//     await sequelize.authenticate();
+//     console.log('✅ Database connected successfully');
+
+//     // Sync models (use { alter: true } in dev, { force: false } in prod)
+//     await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+//     console.log('✅ Models synced');
+
+//     app.listen(PORT, '0.0.0.0', () => {
+//       console.log(`🚀 Server running on http://localhost:${PORT}`);
+//       console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+//     });
+//   } catch (error) {
+//     console.error('❌ Failed to start server:', error);
+//     process.exit(1);
+//   }
 // };
 
-// app.use(errorHandler);
+// startServer();
 
-// app.listen(PORT, () => {
-//     console.log(`Server running on http://localhost:${PORT}`);
-// });
+
+
+
 
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
+const sequelize = require('./config/database');
 
 const authRoutes = require('./routes/auth.routes');
-const mentorRoutes = require('./routes/mentor.routes');
 const adminRoutes = require('./routes/admin.routes');
-
+const mentorRoutes = require('./routes/mentor.routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔥 CORS (THIS ALONE IS ENOUGH)
+// Middleware
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
 }));
-
-// Middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
+// app.use('/api/v1/auth', authRoutes);
+
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/mentors', mentorRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/mentors', mentorRoutes);
 
-// Health check
-app.get('/', (req, res) => {
-  res.send('CareerSync Server Running!');
-});
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ message: 'Internal Server Error' });
+  console.error('🔥 Error:', err);
+  res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-});
+// Start server
+const startServer = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ DB connected');
+    // await sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+    // console.log('✅ Models synced');
+    await sequelize.authenticate();
+    console.log('✅ DB connected (no sync)');
+
+
+    app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

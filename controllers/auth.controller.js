@@ -1,730 +1,327 @@
-// const db = require('../config/database');
-// const bcrypt = require('bcryptjs');
-// const jwt = require('jsonwebtoken');
-// const { sendVerificationEmail } = require('../services/email.service');
-// const { v4: uuidv4 } = require('uuid');
-
-// // --- HELPER FUNCTION: JWT GENERATION ---
-// const generateTokens = (user) => {
-//   const payload = {
-//     id: user.id,
-//     email: user.email,
-//     role_name: user.role_name
-//   };
-
-//   const accessToken = jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
-//     expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m'
-//   });
-
-//   const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
-//     expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d'
-//   });
-
-//   return { accessToken, refreshToken };
-// };
-
-// // --- 1. REGISTER MENTOR ---
-// const registerMentor = async (req, res) => {
-//   const {
-//     email, password, firstName, lastName, phone, gender, dob,
-//     position_id, industry_id, job_title, about_mentor, experience_years, document_url
-//   } = req.body;
-
-//   if (!email || !password || !firstName || !lastName) {
-//     return res.status(400).json({ message: 'Required fields missing.' });
-//   }
-
-//   const client = db.pool;
-//   const userId = uuidv4();
-//   const mentorProfileId = uuidv4();
-//   const verificationToken = uuidv4();
-//   const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
-
-//   try {
-//     const existing = await db.query('SELECT id FROM Users WHERE email = $1', [email]);
-//     if (existing.rows.length > 0) {
-//       return res.status(409).json({ message: 'Email already registered.' });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     await client.query('BEGIN');
-
-//     await db.query(
-//       'INSERT INTO Users (id, email, password, role_name, status) VALUES ($1, $2, $3, $4, $5)',
-//       [userId, email, hashedPassword, 'mentor', 'unverified']
-//     );
-
-//     await db.query(
-//       `INSERT INTO Mentor (id, user_id, first_name, last_name, gender, dob, phone, position_id, industry_id, job_title, about_mentor, experience_years) 
-//        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-//       [mentorProfileId, userId, firstName, lastName, gender, dob, phone, position_id, industry_id, job_title, about_mentor, experience_years]
-//     );
-
-//     await db.query(
-//       'INSERT INTO Mentor_Documents (mentor_id, document_url, is_primary_cv) VALUES ($1, $2, $3)',
-//       [mentorProfileId, document_url, true]
-//     );
-
-//     // store verification token in Login_Session (as temporary refresh_token)
-//     await db.query(
-//       `INSERT INTO Login_Session (user_id, refresh_token, access_token, expired_at) 
-//        VALUES ($1,$2,$3,$4)`,
-//       [userId, verificationToken, 'temp_mentor', expiredAt]
-//     );
-
-//     await client.query('COMMIT');
-
-//     // send email after commit (so token is persisted)
-//     await sendVerificationEmail(email, verificationToken, 'mentor');
-
-//     res.status(201).json({ message: 'Mentor application submitted. Verify email to continue.' });
-//   } catch (error) {
-//     try { await client.query('ROLLBACK'); } catch (e) { /* ignore */ }
-//     console.error('Mentor registration error:', error);
-//     res.status(500).json({ message: 'Server error during mentor registration.' });
-//   }
-// };
-
-
-
-
-// // --- 2. LOGIN ---
-// const login = async (req, res, next) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     if (!email || !password) {
-//       return res.status(400).json({ message: 'email and password required.' });
-//     }
-
-//     console.log('LOGIN EMAIL:', email);
-
-//     const userResult = await db.query(
-//       'SELECT id, email, password, role_name, status FROM Users WHERE email = $1',
-//       [email]
-//     );
-
-//     const user = userResult.rows[0];
-//     console.log('DB USER FOUND:', !!user);
-
-//     if (!user) {
-//       return res.status(401).json({ message: 'Invalid credentials.' });
-//     }
-
-//     if (user.status !== 'active') {
-//       return res.status(403).json({ message: 'Account not active.' });
-//     }
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     console.log('PASSWORD MATCH:', isMatch);
-
-//     if (!isMatch) {
-//       return res.status(401).json({ message: 'Invalid credentials.' });
-//     }
-
-//     const { accessToken, refreshToken } = generateTokens(user);
-
-//     const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-//     await db.query(
-//       `INSERT INTO Login_Session (user_id, refresh_token, access_token, expired_at)
-//        VALUES ($1,$2,$3,$4)
-//        ON CONFLICT (user_id)
-//        DO UPDATE SET refresh_token = EXCLUDED.refresh_token,
-//                      access_token = EXCLUDED.access_token,
-//                      expired_at = EXCLUDED.expired_at`,
-//       [user.id, refreshToken, accessToken, expiryDate]
-//     );
-
-//     res.cookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', refreshToken, {
-//       httpOnly: true,
-//       secure: process.env.NODE_ENV === 'production',
-//       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-//       maxAge: 7 * 24 * 60 * 60 * 1000,
-//       path: '/',
-//     });
-
-//     return res.json({
-//       accessToken,
-//       user: {
-//         id: user.id,
-//         email: user.email,
-//         role_name: user.role_name,
-//       },
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-
-
-// // const login = async (req, res, next) => {
-// //   try {
-// //     const { email, password } = req.body;
-
-// //     if (!email || !password) {
-// //       return res.status(400).json({ message: 'email and password required.' });
-// //     }
-
-// //     const userResult = await db.query(
-// //       `SELECT u.id, u.email, u.password, u.role_name, u.status,
-// //               m.first_name, m.last_name
-// //        FROM Users u
-// //        LEFT JOIN Mentor m ON u.id = m.user_id
-// //        WHERE u.email = $1`,
-// //       [email]
-// //     );
-
-// //     const user = userResult.rows[0];
-// //     if (!user) return res.status(401).json({ message: 'Invalid credentials.' });
-// //     if (user.status !== 'active') return res.status(403).json({ message: 'Account not active.' });
-
-// //     const isMatch = await bcrypt.compare(password, user.password);
-// //     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials.' });
-
-// //     const { accessToken, refreshToken } = generateTokens(user);
-
-// //     const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-// //     await db.query(
-// //       `INSERT INTO Login_Session (user_id, refresh_token, access_token, expired_at)
-// //        VALUES ($1,$2,$3,$4)
-// //        ON CONFLICT (user_id)
-// //        DO UPDATE SET refresh_token = EXCLUDED.refresh_token,
-// //                      access_token = EXCLUDED.access_token,
-// //                      expired_at = EXCLUDED.expired_at`,
-// //       [user.id, refreshToken, accessToken, expiryDate]
-// //     );
-
-// //     res.cookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', refreshToken, {
-// //       httpOnly: true,
-// //       secure: process.env.NODE_ENV === 'production',
-// //       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-// //       maxAge: 7 * 24 * 60 * 60 * 1000,
-// //       path: '/',
-// //     });
-
-// //     return res.json({
-// //       accessToken,
-// //       user: {
-// //         id: user.id,
-// //         email: user.email,
-// //         role_name: user.role_name,
-// //         first_name: user.first_name || '',
-// //         last_name: user.last_name || ''
-// //       },
-// //     });
-// //   } catch (err) {
-// //     next(err);
-// //   }
-// // };
-
-
-
-
-// // --- 3. TOKEN REFRESH ---
-// const refreshToken = async (req, res) => {
-//   const token = req.cookies ? req.cookies[process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid'] : null;
-//   if (!token) return res.status(401).json({ message: 'Refresh token missing.' });
-
-//   try {
-//     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-
-//     const sessionResult = await db.query('SELECT user_id FROM Login_Session WHERE refresh_token = $1', [token]);
-//     if (sessionResult.rows.length === 0) {
-//       return res.status(403).json({ message: 'Invalid refresh token.' });
-//     }
-
-//     // const userResult = await db.query('SELECT id, email, role_name FROM Users WHERE id = $1', [decoded.id]);
-//         const userResult = await db.query(
-//       `SELECT u.id, u.email, u.role_name, m.first_name, m.last_name
-//       FROM Users u
-//       LEFT JOIN Mentor m ON u.id = m.user_id
-//       WHERE u.id = $1`,
-//       [decoded.id]
-//     );
-
-//     const user = userResult.rows[0];
-//     if (!user) return res.status(404).json({ message: 'User not found.' });
-
-//     const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(user);
-
-//     const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-//     await db.query(
-//       'UPDATE Login_Session SET refresh_token = $1, access_token = $2, expired_at = $3 WHERE user_id = $4',
-//       [newRefreshToken, newAccessToken, expiryDate, user.id]
-//     );
-
-//     res.cookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', newRefreshToken, {
-//       httpOnly: true,
-//       secure: process.env.NODE_ENV === 'production',
-//       sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-//       maxAge: 7 * 24 * 60 * 60 * 1000,
-//       path: '/'
-//     });
-
-//     res.json({ accessToken: newAccessToken, role: user.role_name });
-//   } catch (error) {
-//     console.error('Token refresh error:', error);
-//     res.status(403).json({ message: 'Invalid or expired refresh token.' });
-//   }
-// };
-
-// // --- 4. FORGOT PASSWORD ---
-// const forgotPassword = async (req, res) => {
-//   const { email } = req.body;
-//   if (!email) return res.json({ message: 'If the email exists, a password reset link has been sent.' });
-
-//   try {
-//     const userResult = await db.query('SELECT id FROM Users WHERE email = $1 AND status = $2', [email, 'active']);
-//     if (userResult.rows.length === 0) {
-//       return res.json({ message: 'If the email exists, a password reset link has been sent.' });
-//     }
-
-//     const userId = userResult.rows[0].id;
-//     const resetToken = uuidv4();
-//     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-//     await db.query(
-//       `INSERT INTO Password_Reset (user_id, reset_token, expires_at) 
-//        VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET reset_token = EXCLUDED.reset_token, expires_at = EXCLUDED.expires_at`,
-//       [userId, resetToken, expiresAt]
-//     );
-
-//     // send password reset email (service must implement)
-//     try { await require('../services/email.service').sendPasswordResetEmail(email, resetToken); } catch (e) { /* log but don't fail */ }
-
-//     res.json({ message: 'If the email exists, a password reset link has been sent.' });
-//   } catch (error) {
-//     console.error('Forgot password error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
-
-// // --- 5. RESET PASSWORD ---
-// const resetPassword = async (req, res) => {
-//   const { token, newPassword } = req.body;
-//   if (!token || !newPassword) return res.status(400).json({ message: 'token and newPassword are required.' });
-
-//   try {
-//     const resetResult = await db.query('SELECT user_id, expires_at FROM Password_Reset WHERE reset_token = $1', [token]);
-//     if (resetResult.rows.length === 0 || new Date(resetResult.rows[0].expires_at) < new Date()) {
-//       return res.status(400).json({ message: 'Invalid or expired password reset token.' });
-//     }
-
-//     const userId = resetResult.rows[0].user_id;
-//     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-//     await db.query('UPDATE Users SET password = $1, last_password_change = NOW() WHERE id = $2', [hashedPassword, userId]);
-//     await db.query('DELETE FROM Password_Reset WHERE reset_token = $1', [token]);
-
-//     res.json({ message: 'Password has been reset successfully.' });
-//   } catch (error) {
-//     console.error('Reset password error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
-
-// // --- 6. UPDATE PASSWORD (Protected Route) ---
-// const updatePassword = async (req, res) => {
-//   const userId = req.user && req.user.id;
-//   const { currentPassword, newPassword } = req.body;
-//   if (!userId) return res.status(401).json({ message: 'Unauthorized.' });
-//   if (!currentPassword || !newPassword) return res.status(400).json({ message: 'currentPassword and newPassword are required.' });
-
-//   try {
-//     const userResult = await db.query('SELECT password FROM Users WHERE id = $1', [userId]);
-//     const user = userResult.rows[0];
-//     if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
-//       return res.status(401).json({ message: 'Invalid current password.' });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(newPassword, 10);
-//     await db.query('UPDATE Users SET password = $1, last_password_change = NOW() WHERE id = $2', [hashedPassword, userId]);
-
-//     // optionally invalidate existing sessions
-//     res.json({ message: 'Password updated successfully.' });
-//   } catch (error) {
-//     console.error('Update password error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
-
-// // --- VERIFY EMAIL ---
-// const verifyEmail = async (req, res) => {
-//   const { token } = req.query;
-//   if (!token) return res.status(400).json({ message: 'token is required.' });
-
-//   try {
-//     const sessionRes = await db.query('SELECT user_id FROM Login_Session WHERE refresh_token = $1', [token]);
-//     if (sessionRes.rows.length === 0) return res.status(400).json({ message: 'Invalid token.' });
-
-//     const userId = sessionRes.rows[0].user_id;
-//     await db.query('UPDATE Users SET status = $1, email_verified_at = NOW() WHERE id = $2', ['active', userId]);
-//     // remove the temporary token
-//     await db.query('DELETE FROM Login_Session WHERE refresh_token = $1 AND access_token = $2', [token, 'temp_mentor']);
-
-//     res.json({ message: 'Email verified. You may now login.' });
-//   } catch (error) {
-//     console.error('verifyEmail error:', error);
-//     res.status(500).json({ message: 'Server error.' });
-//   }
-// };
-
-// // --- LOGOUT ---
-// const logout = async (req, res) => {
-//   const token = req.cookies ? req.cookies[process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid'] : null;
-//   if (token) {
-//     try { await db.query('DELETE FROM Login_Session WHERE refresh_token = $1', [token]); } catch (e) { /* ignore */ }
-//   }
-//   res.clearCookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', { path: '/' });
-//   res.json({ message: 'Logged out.' });
-// };
-
-
-// const getMe = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT
-//         u.id,
-//         u.email,
-//         u.role_name,
-
-//         a.first_name,
-//         a.last_name
-
-//       FROM Users u
-//       LEFT JOIN Admin a ON a.user_id = u.id
-//       WHERE u.id = $1
-//     `, [req.user.id]);
-
-//     res.json(result.rows[0]);
-//   } catch (error) {
-//     console.error('getMe error:', error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-
-
-// module.exports = {
-//   registerMentor,
-//   login,
-//   refreshToken,
-//   verifyEmail,
-//   logout,
-//   getMe,
-//   forgotPassword,
-//   resetPassword,
-//   updatePassword,
-// };
-
-
-
-
-
-const db = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { sendVerificationEmail } = require('../services/email.service');
 const { v4: uuidv4 } = require('uuid');
+const db = require('../models'); // Check if this path is correct for your folder structure
+// Add sendResetPasswordEmail to the list inside { }
+const { sendVerificationEmail, sendResetPasswordEmail } = require('../services/email.service');
+const PasswordReset = db.PasswordReset;
 
+// Make sure these match your exports in models/index.js
+const User = db.User;
+const Admin = db.Admin;
+const Mentor = db.Mentor;
+const AccUser = db.AccUser;
+const LoginSession = db.LoginSession;
+
+
+
+// Helper: Generate Tokens
 const generateTokens = (user) => {
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role_name: user.role_name
+  const payload = { id: user.id, email: user.email, role_name: user.role_name };
+  return {
+    accessToken: jwt.sign(payload, process.env.JWT_ACCESS_SECRET, { expiresIn: '15m' }),
+    refreshToken: jwt.sign(payload, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' })
   };
-  const accessToken = jwt.sign(payload, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m'
-  });
-  const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d'
-  });
-  return { accessToken, refreshToken };
 };
+
+// ==========================================
+// 1. AUTHENTICATION FUNCTIONS (Restored)
+// ==========================================
 
 const registerMentor = async (req, res) => {
-  const {
-    email, password, firstName, lastName, phone, gender, dob,
-    position_id, industry_id, job_title, about_mentor, experience_years, document_url
-  } = req.body;
+  const { email, password, firstName, lastName } = req.body;
   if (!email || !password || !firstName || !lastName) {
-    return res.status(400).json({ message: 'Required fields missing.' });
+    return res.status(400).json({ message: 'Required fields missing' });
   }
-  const userId = uuidv4();
-  const mentorProfileId = uuidv4();
-  const verificationToken = uuidv4();
-  const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 1 day
+
   try {
-    const existing = await db.query('SELECT id FROM Users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ message: 'Email already registered.' });
-    }
+    const existing = await User.findOne({ where: { email } });
+    if (existing) return res.status(409).json({ message: 'Email already registered' });
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    await db.pool.query('BEGIN');
-    await db.query(
-      'INSERT INTO Users (id, email, password, role_name, status) VALUES ($1, $2, $3, $4, $5)',
-      [userId, email, hashedPassword, 'mentor', 'unverified']
-    );
-    await db.query(
-      `INSERT INTO Mentor (id, user_id, first_name, last_name, gender, dob, phone, position_id, industry_id, job_title, about_mentor, experience_years)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [mentorProfileId, userId, firstName, lastName, gender, dob, phone, position_id, industry_id, job_title, about_mentor, experience_years]
-    );
-    await db.query(
-      'INSERT INTO Mentor_Documents (mentor_id, document_url, is_primary_cv) VALUES ($1, $2, $3)',
-      [mentorProfileId, document_url, true]
-    );
-    await db.query(
-      `INSERT INTO Login_Session (user_id, refresh_token, access_token, expired_at)
-       VALUES ($1,$2,$3,$4)`,
-      [userId, verificationToken, 'temp_mentor', expiredAt]
-    );
-    await db.pool.query('COMMIT');
+    
+    // Create User
+    const user = await User.create({ 
+      id: uuidv4(), 
+      email, 
+      password: hashedPassword, 
+      role_name: 'mentor', 
+      status: 'unverified' 
+    });
+    
+    // Create Mentor Profile
+    await Mentor.create({ 
+      id: uuidv4(), 
+      user_id: user.id, 
+      first_name: firstName, 
+      last_name: lastName, 
+      approval_status: 'pending' 
+    });
+
+    // Create Verification Token
+    const verificationToken = uuidv4();
+    await LoginSession.create({ 
+      user_id: user.id, 
+      refresh_token: verificationToken, 
+      access_token: 'temp', 
+      expired_at: new Date(Date.now() + 24 * 60 * 60 * 1000) 
+    });
+
     await sendVerificationEmail(email, verificationToken, 'mentor');
-    res.status(201).json({ message: 'Mentor application submitted. Verify email to continue.' });
-  } catch (error) {
-    await db.pool.query('ROLLBACK');
-    console.error('Mentor registration error:', error);
-    res.status(500).json({ message: 'Server error during mentor registration.' });
+    res.status(201).json({ message: 'Mentor registered. Check email to verify.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error during registration' });
   }
 };
 
-const login = async (req, res, next) => {
+const login = async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ message: 'Email and password required' });
+
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ message: 'email and password required.' });
-    }
-    const userResult = await db.query(
-      `SELECT u.id, u.email, u.password, u.role_name, u.status,
-       m.first_name, m.last_name, a.first_name AS admin_first_name, a.last_name AS admin_last_name
-       FROM Users u
-       LEFT JOIN Mentor m ON u.id = m.user_id
-       LEFT JOIN Admin a ON u.id = a.user_id
-       WHERE u.email = $1`,
-      [email]
-    );
-    const user = userResult.rows[0];
-    if (!user) return res.status(401).json({ message: 'Invalid credentials.' });
-    if (user.status !== 'active') return res.status(403).json({ message: 'Account not active.' });
+    const user = await User.findOne({ where: { email } });
+
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    if (user.status !== 'active') return res.status(403).json({ message: 'Account not active' });
+
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials.' });
+    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+
     const { accessToken, refreshToken } = generateTokens(user);
-    const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.query(
-      `INSERT INTO Login_Session (user_id, refresh_token, access_token, expired_at)
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT (user_id)
-       DO UPDATE SET refresh_token = EXCLUDED.refresh_token,
-                     access_token = EXCLUDED.access_token,
-                     expired_at = EXCLUDED.expired_at`,
-      [user.id, refreshToken, accessToken, expiryDate]
-    );
-    res.cookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
+
+    // Save refresh token to DB
+    await LoginSession.upsert({
+      user_id: user.id,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expired_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
+
+    // Set Cookie
+    res.cookie('jid', refreshToken, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
     return res.json({
       accessToken,
       user: {
         id: user.id,
         email: user.email,
-        role_name: user.role_name,
-        first_name: user.first_name || user.admin_first_name || '',
-        last_name: user.last_name || user.admin_last_name || ''
-      },
+        role_name: user.role_name
+      }
     });
+
   } catch (err) {
-    next(err);
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
 const refreshToken = async (req, res) => {
-  const token = req.cookies ? req.cookies[process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid'] : null;
-  if (!token) return res.status(401).json({ message: 'Refresh token missing.' });
+  const token = req.cookies?.jid;
+  if (!token) return res.status(401).json({ message: 'Refresh token missing' });
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-    const sessionResult = await db.query('SELECT user_id FROM Login_Session WHERE refresh_token = $1', [token]);
-    if (sessionResult.rows.length === 0) {
-      return res.status(403).json({ message: 'Invalid refresh token.' });
-    }
-    const userResult = await db.query(
-      `SELECT u.id, u.email, u.role_name, m.first_name, m.last_name, a.first_name AS admin_first_name, a.last_name AS admin_last_name
-      FROM Users u
-      LEFT JOIN Mentor m ON u.id = m.user_id
-      LEFT JOIN Admin a ON u.id = a.user_id
-      WHERE u.id = $1`,
-      [decoded.id]
-    );
-    const user = userResult.rows[0];
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens(user);
-    const expiryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.query(
-      'UPDATE Login_Session SET refresh_token = $1, access_token = $2, expired_at = $3 WHERE user_id = $4',
-      [newRefreshToken, newAccessToken, expiryDate, user.id]
-    );
-    res.cookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/'
+    const user = await User.findByPk(decoded.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+    
+    await LoginSession.upsert({ 
+      user_id: user.id, 
+      access_token: accessToken, 
+      refresh_token: newRefreshToken, 
+      expired_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) 
     });
-    res.json({ accessToken: newAccessToken, role: user.role_name });
+
+    res.cookie('jid', newRefreshToken, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.json({ accessToken });
+  } catch (err) {
+    console.error(err);
+    res.status(403).json({ message: 'Invalid or expired refresh token' });
+  }
+};
+
+const logout = async (req, res) => {
+  const token = req.cookies?.jid;
+  if (token) await LoginSession.destroy({ where: { refresh_token: token } });
+  res.clearCookie('jid'); 
+  res.json({ message: 'Logged out' });
+};
+
+const verifyEmail = async (req, res) => {
+  const { token } = req.query;
+
+  try {
+    const session = await LoginSession.findOne({ where: { refresh_token: token } });
+    
+    if (!session) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    const user = await User.findByPk(session.user_id);
+    if (user) {
+        user.status = 'active'; 
+        user.email_verified_at = new Date();
+        await user.save();
+    }
+
+    await session.destroy(); 
+    res.json({ message: 'Email verified successfully' });
   } catch (error) {
-    console.error('Token refresh error:', error);
-    res.status(403).json({ message: 'Invalid or expired refresh token.' });
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// ==========================================
+// 2. SETTINGS & PROFILE FUNCTIONS (Updated)
+// ==========================================
+
+// ✅ UPDATED: Returns full profile details
+const getMe = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: ['id', 'email', 'role_name', 'status'],
+      include: [
+        { model: Admin, as: 'admin', required: false },
+        { model: Mentor, as: 'mentor', required: false },
+        { model: AccUser, as: 'accUser', required: false }
+      ]
+    });
+    
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Extract profile data based on role
+    let profileData = {};
+    if (user.role_name === 'admin' && user.admin) {
+      profileData = user.admin.toJSON();
+    } else if (user.role_name === 'mentor' && user.mentor) {
+      profileData = user.mentor.toJSON();
+    } else if (user.role_name === 'user' && user.accUser) {
+      profileData = user.accUser.toJSON();
+    }
+
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      role_name: user.role_name,
+      status: user.status,
+      ...profileData 
+    });
+  } catch (err) {
+    console.error('getMe error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// ✅ NEW: Update Password
+const updatePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.last_password_change = new Date();
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+
   try {
-    const userResult = await db.query('SELECT id FROM Users WHERE email = $1 AND status = $2', [email, 'active']);
-    if (userResult.rows.length === 0) {
-      return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      // Security: Don't reveal if user exists. Just say email sent.
+      return res.json({ message: 'If that email exists, a reset link has been sent.' });
     }
-    const userId = userResult.rows[0].id;
+
+    // Generate Token
     const resetToken = uuidv4();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await db.query(
-      `INSERT INTO Password_Reset (user_id, reset_token, expires_at)
-       VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET reset_token = EXCLUDED.reset_token, expires_at = EXCLUDED.expires_at`,
-      [userId, resetToken, expiresAt]
-    );
-    try { await require('../services/email.service').sendPasswordResetEmail(email, resetToken); } catch (e) { console.error(e); }
-    res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+
+    // Save to DB (Handle duplicates by deleting old requests first)
+    await PasswordReset.destroy({ where: { user_id: user.id } });
+    await PasswordReset.create({
+      user_id: user.id,
+      reset_token: resetToken,
+      expires_at: expiresAt
+    });
+
+    // Send Email
+    await sendResetPasswordEmail(email, resetToken);
+
+    res.json({ message: 'Reset link sent! Please check your email.' });
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Server error.' });
-  }
-};
-
-const resetPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword) return res.status(400).json({ message: 'token and newPassword are required.' });
-  try {
-    const resetResult = await db.query('SELECT user_id, expires_at FROM Password_Reset WHERE reset_token = $1', [token]);
-    if (resetResult.rows.length === 0 || new Date(resetResult.rows[0].expires_at) < new Date()) {
-      return res.status(400).json({ message: 'Invalid or expired password reset token.' });
-    }
-    const userId = resetResult.rows[0].user_id;
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE Users SET password = $1, last_password_change = NOW() WHERE id = $2', [hashedPassword, userId]);
-    await db.query('DELETE FROM Password_Reset WHERE reset_token = $1', [token]);
-    res.json({ message: 'Password has been reset successfully.' });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ message: 'Server error.' });
-  }
-};
-
-const updatePassword = async (req, res) => {
-  const userId = req.user?.id;
-  const { currentPassword, newPassword } = req.body;
-  if (!userId) return res.status(401).json({ message: 'Unauthorized.' });
-  if (!currentPassword || !newPassword) return res.status(400).json({ message: 'currentPassword and newPassword are required.' });
-  try {
-    const userResult = await db.query('SELECT password FROM Users WHERE id = $1', [userId]);
-    const user = userResult.rows[0];
-    if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
-      return res.status(401).json({ message: 'Invalid current password.' });
-    }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE Users SET password = $1, last_password_change = NOW() WHERE id = $2', [hashedPassword, userId]);
-    res.json({ message: 'Password updated successfully.' });
-  } catch (error) {
-    console.error('Update password error:', error);
-    res.status(500).json({ message: 'Server error.' });
-  }
-};
-
-const verifyEmail = async (req, res) => {
-  const { token } = req.query;
-  if (!token) return res.status(400).json({ message: 'token is required.' });
-  try {
-    const sessionRes = await db.query('SELECT user_id FROM Login_Session WHERE refresh_token = $1', [token]);
-    if (sessionRes.rows.length === 0) return res.status(400).json({ message: 'Invalid token.' });
-    const userId = sessionRes.rows[0].user_id;
-    await db.query('UPDATE Users SET status = $1, email_verified_at = NOW() WHERE id = $2', ['active', userId]);
-    await db.query('DELETE FROM Login_Session WHERE refresh_token = $1 AND access_token = $2', [token, 'temp_mentor']);
-    res.json({ message: 'Email verified. You may now login.' });
-  } catch (error) {
-    console.error('verifyEmail error:', error);
-    res.status(500).json({ message: 'Server error.' });
-  }
-};
-
-const logout = async (req, res) => {
-  const token = req.cookies ? req.cookies[process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid'] : null;
-  if (token) {
-    try { await db.query('DELETE FROM Login_Session WHERE refresh_token = $1', [token]); } catch (e) { console.error(e); }
-  }
-  res.clearCookie(process.env.REFRESH_TOKEN_COOKIE_NAME || 'jid', { path: '/' });
-  res.json({ message: 'Logged out.' });
-};
-
-// const getMe = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT
-//         u.id,
-//         u.email,
-//         u.role_name,
-//         a.first_name,
-//         a.last_name
-//       FROM Users u
-//       LEFT JOIN Admin a ON a.user_id = u.id
-//       WHERE u.id = $1
-//     `, [req.user.id]);
-//     res.json(result.rows[0]);
-//   } catch (error) {
-//     console.error('getMe error:', error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-const getMe = async (req, res) => {
-  try {
-    const result = await db.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.role_name,
-        a.first_name,
-        a.last_name,
-        a.profile_image  -- ← ADD THIS
-      FROM Users u
-      LEFT JOIN Admin a ON a.user_id = u.id
-      WHERE u.id = $1
-    `, [req.user.id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('getMe error:', error);
+    console.error('Forgot Password Error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
-module.exports = {
-  registerMentor,
-  login,
-  refreshToken,
-  forgotPassword,
-  resetPassword,
-  updatePassword,
+
+// ✅ 2. Reset Password (User clicks link -> Enters new password)
+const resetPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+  
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Token and new password required' });
+  }
+
+  try {
+    // Find valid token
+    const resetRecord = await PasswordReset.findOne({ where: { reset_token: token } });
+    
+    if (!resetRecord) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    // Check expiration
+    if (new Date() > new Date(resetRecord.expires_at)) {
+      return res.status(400).json({ message: 'Token has expired' });
+    }
+
+    // Update User Password
+    const user = await User.findByPk(resetRecord.user_id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.last_password_change = new Date();
+    await user.save();
+
+    // Delete the used token
+    await resetRecord.destroy();
+
+    res.json({ message: 'Password has been reset successfully. Please login.' });
+  } catch (error) {
+    console.error('Reset Password Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+module.exports = { 
+  registerMentor, 
+  login, 
+  refreshToken, 
+  logout, 
+  getMe, 
   verifyEmail,
-  logout,
-  getMe
+  updatePassword,
+  forgotPassword ,
+  resetPassword
 };

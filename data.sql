@@ -70,11 +70,12 @@ FOREIGN KEY (created_by) REFERENCES Users (id);
     role_name user_role NOT NULL,
     status account_status NOT NULL DEFAULT 'unverified',
     email_verified_at timestamptz,
-    created_at timestamptz DEFAULT now(),
+    created_at timestamptz DEFAULT now(), 
     updated_at timestamptz DEFAULT now(),
     last_login timestamptz,
     last_password_change timestamptz,
-    deleted_at timestamptz
+    deleted_at timestamptz,
+    created_by uuid,
   );
 
   -- Index for login/lookup
@@ -318,6 +319,7 @@ FOREIGN KEY (created_by) REFERENCES Users (id);
   -- --- NEW TABLES ADDED ---
 
   CREATE TABLE Login_Session (
+    
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     row_num serial UNIQUE,
     user_id uuid NOT NULL,

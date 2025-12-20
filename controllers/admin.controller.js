@@ -1,830 +1,204 @@
-// const db = require('../config/database');
-// const bcrypt = require('bcryptjs');
-// const { v4: uuidv4 } = require('uuid');
-// const multer = require('multer');
-// const path = require('path');
-// const fs = require('fs');
-// const { log } = require('console');
-
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     const dir = 'uploads/positions';
-//     // Create folder if it doesn't exist
-//     if (!fs.existsSync(dir)) {
-//       fs.mkdirSync(dir, { recursive: true });
-//     }
-//     cb(null, dir);
-//   },
-//   filename: (req, file, cb) => {
-//     cb(null, Date.now() + path.extname(file.originalname));
-//   }
-// });
-
-// const upload = multer({ storage });
-
-
-// // // --- 1. SEED/INITIAL ADMIN CREATION (HIGHLY RESTRICTED) ---
-// // const createInitialAdmin = async (req, res) => {
-// //     const { email, password, fullName, phone } = req.body;
-
-// //     try {
-// //         const existingAdmin = await db.query("SELECT id FROM Users WHERE role_name = 'admin'");
-// //         if (existingAdmin.rows.length > 0) {
-// //             return res.status(403).json({ message: 'Admin already seeded.' });
-// //         }
-
-// //         const hashedPassword = await bcrypt.hash(password, 10);
-// //         const userId = uuidv4();
-// //         const adminId = uuidv4();
-
-// //         await db.pool.query('BEGIN');
-
-// //         // await db.query(
-// //         //     `INSERT INTO Users (id, email, password, role_name, status, email_verified_at) 
-// //         //      VALUES ($1, $2, $3, $4, $5, NOW())`,
-// //         //     [userId, email, hashedPassword, 'admin', 'active']
-// //         // );
-
-// //             await db.query(
-// //           `INSERT INTO Users (
-// //             id, email, password, role_name, status, email_verified_at, created_by
-// //           )
-// //           VALUES ($1,$2,$3,$4,'inactive',NOW(), $5)`,
-// //           [userId, email, hashedPassword, role_name, req.user.id]
-// //         );
-
-
-// //         await db.query(
-// //             `INSERT INTO Admin (id, user_id, full_name, phone) 
-// //              VALUES ($1, $2, $3, $4)`,
-// //             [adminId, userId, fullName, phone]
-// //         );
-
-// //         await db.pool.query('COMMIT');
-
-// //         res.status(201).json({ message: 'Initial Admin account created successfully.' });
-
-// //     } catch (error) {
-// //         try { await db.pool.query('ROLLBACK'); } catch (e) { /* ignore */ }
-// //         console.error('Admin creation error:', error);
-// //         res.status(500).json({ message: 'Server error during initial Admin creation.' });
-// //     }
-// // };
-
-// const createInitialAdmin = async (req, res) => {
-//   const { email, password, first_name, last_name, phone } = req.body;
-
-//   try {
-//     // ❗ Only allow ONE initial admin
-//     const existingAdmin = await db.query(
-//       "SELECT id FROM Users WHERE role_name = 'admin'"
-//     );
-
-//     if (existingAdmin.rows.length > 0) {
-//       return res.status(403).json({ message: 'Admin already exists' });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-//     const userId = uuidv4();
-//     const adminId = uuidv4();
-
-//     await db.pool.query('BEGIN');
-
-//     // ✅ USERS (created_by = NULL)
-//     await db.query(
-//       `INSERT INTO Users (
-//         id, email, password, role_name, status, email_verified_at, created_by
-//       )
-//       VALUES ($1,$2,$3,'admin','active',NOW(), NULL)`,
-//       [userId, email, hashedPassword]
-//     );
-
-//     // ✅ ADMIN PROFILE
-//     await db.query(
-//       `INSERT INTO Admin (id, user_id, first_name, last_name, phone)
-//        VALUES ($1,$2,$3,$4,$5)`,
-//       [adminId, userId, first_name, last_name, phone]
-//     );
-
-//     await db.pool.query('COMMIT');
-
-//     res.status(201).json({ message: 'Initial admin created successfully' });
-
-//   } catch (error) {
-//     await db.pool.query('ROLLBACK');
-//     console.error(error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-// const getMentorStats = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT
-//         COUNT(*)::int AS total,
-//         COUNT(*) FILTER (WHERE approval_status = 'approved')::int AS accepted,
-//         COUNT(*) FILTER (WHERE approval_status = 'rejected')::int AS rejected,
-//         COUNT(*) FILTER (WHERE approval_status = 'pending')::int AS pending
-//       FROM Mentor
-//     `);
-
-//     res.json(result.rows[0]);
-//   } catch (error) {
-//     console.error('getMentorStats error:', error);
-//     res.status(500).json({ message: 'Failed to fetch mentor stats' });
-//   }
-// };
-// const reviewMentor = async (req, res) => {
-//   const { mentorId } = req.params;
-//   const { action } = req.body;
-
-//   if (!['accept', 'reject'].includes(action)) {
-//     return res.status(400).json({ message: 'Invalid action' });
-//   }
-
-//   const mentorStatus = action === 'accept' ? 'approved' : 'rejected';
-//   const userStatus = action === 'accept' ? 'active' : 'rejected';
-
-//   try {
-//     await db.pool.query('BEGIN');
-
-//     // Update mentor approval status
-//     const mentorResult = await db.query(
-//       `UPDATE Mentor 
-//        SET approval_status = $1, updated_at = NOW()
-//        WHERE id = $2
-//        RETURNING user_id`,
-//       [mentorStatus, mentorId]
-//     );
-
-//     if (mentorResult.rows.length === 0) {
-//       await db.pool.query('ROLLBACK');
-//       return res.status(404).json({ message: 'Mentor not found' });
-//     }
-
-//     const userId = mentorResult.rows[0].user_id;
-
-//     // Update user status
-//     await db.query(
-//       `UPDATE Users SET status = $1 WHERE id = $2`,
-//       [userStatus, userId]
-//     );
-
-//     await db.pool.query('COMMIT');
-
-//     console.log('🔥 REVIEW HIT:', mentorId, action);
-
-//     res.json({ message: `Mentor ${mentorStatus} successfully` });
-
-//   } catch (error) {
-//     await db.pool.query('ROLLBACK');
-//     console.error('reviewMentor error:', error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-
-// };
-
-
-// const listPendingMentors = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT
-//         m.id,
-//         m.first_name,
-//         m.last_name,
-//         m.gender,
-//         m.job_title,
-//         m.created_at,
-//         p.position_name,
-//         d.document_url
-//       FROM Mentor m
-//       JOIN Users u ON u.id = m.user_id
-//       LEFT JOIN Position p ON p.id = m.position_id
-//       LEFT JOIN Mentor_Documents d ON d.mentor_id = m.id AND d.is_primary_cv = true
-//       WHERE m.approval_status = 'pending'
-//       ORDER BY m.created_at DESC
-//     `);
-
-//     res.json(result.rows);
-//   } catch (error) {
-//     console.error('listPendingMentors error:', error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-// const createIndustry = async (req, res) => {
-//   const { industry_name } = req.body;
-
-//   if (!industry_name) {
-//     return res.status(400).json({ message: 'Industry name required' });
-//   }
-
-//   try {
-//     const result = await db.query(
-//       'INSERT INTO Industry (industry_name) VALUES ($1) RETURNING *',
-//       [industry_name]
-//     );
-
-//     res.status(201).json({
-//       message: 'Industry created',
-//       industry: result.rows[0],
-//     });
-//   } catch (err) {
-//     if (err.code === '23505') {
-//       return res.status(409).json({ message: 'Industry already exists' });
-//     }
-
-//     console.error(err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-
-
-// const getIndustries = async (req, res) => {
-//   try {
-//     const result = await db.query('SELECT * FROM Industry ORDER BY created_at DESC');
-//     res.json(result.rows);
-//   } catch (err) {
-//     console.error('getIndustries error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// const updateIndustry = async (req, res) => {
-//   const { id } = req.params;
-//   const { industry_name } = req.body;
-
-//   try {
-//     const result = await db.query(
-//       'UPDATE Industry SET industry_name=$1 WHERE id=$2 RETURNING *',
-//       [industry_name, id]
-//     );
-//     res.json(result.rows[0]);
-//   } catch (err) {
-//     console.error('updateIndustry error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// const deleteIndustry = async (req, res) => {
-//   const { id } = req.params;
-//   try {
-//     await db.query('DELETE FROM Industry WHERE id=$1', [id]);
-//     res.json({ message: 'Industry deleted' });
-//   } catch (err) {
-//     console.error('deleteIndustry error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-
-
-
-
-// const createPosition = async (req, res) => {
-//   const { industry_id, position_name, description } = req.body;
-
-//   if (!industry_id || !position_name) {
-//     return res.status(400).json({
-//       message: 'industry_id and position_name are required'
-//     });
-//   }
-
-//   const image_position = req.file ? req.file.filename : null;
-
-//   try {
-//     const result = await db.query(
-//       `
-//       INSERT INTO Position (
-//         industry_id,
-//         position_name,
-//         description,
-//         image_position
-//       )
-//       VALUES ($1, $2, $3, $4)
-//       RETURNING *
-//       `,
-//       [industry_id, position_name, description || null, image_position]
-//     );
-
-//     res.status(201).json(result.rows[0]);
-//   } catch (error) {
-//     console.error('createPosition error:', error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// const getPositions = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT 
-//         p.*, 
-//         i.industry_name AS industry
-//       FROM Position p
-//       JOIN Industry i ON p.industry_id = i.id
-//       ORDER BY p.created_at DESC
-//     `);
-//     res.json(result.rows);
-//   } catch (err) {
-//     console.error('getPositions error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// const updatePosition = async (req, res) => {
-//   const { id } = req.params;
-//   const { industry_id, position_name, description } = req.body;
-//   const image_position = req.file ? req.file.filename : null;
-
-//   try {
-//     const result = await db.query(
-//       `
-//       UPDATE Position SET
-//         industry_id=$1,
-//         position_name=$2,
-//         description=$3,
-//         image_position=COALESCE($4, image_position)
-//       WHERE id=$5
-//       RETURNING *
-//       `,
-//       [industry_id, position_name, description, image_position, id]
-//     );
-
-//     res.json(result.rows[0]);
-//   } catch (err) {
-//     console.error('updatePosition error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// const deletePosition = async (req, res) => {
-//   const { id } = req.params;
-//   try {
-//     await db.query('DELETE FROM Position WHERE id=$1', [id]);
-//     res.json({ message: 'Position deleted' });
-//   } catch (err) {
-//     console.error('deletePosition error:', err);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-
-// const createRole = async (req, res) => {
-//   const {
-//     email, password, role_name,
-//     first_name, last_name, phone, gender, dob,
-//     types_user, institution_name,
-//     position_id, industry_id, job_title, expertise_areas,
-//     experience_years, company_name, social_media, about_mentor,
-//     education
-//   } = req.body;
-
-//   const profile_image = req.file ? req.file.filename : null;
-
-//   try {
-//     await db.pool.query('BEGIN');
-
-//     // 1. Check email
-//     const emailCheck = await db.query(
-//       'SELECT id FROM Users WHERE email = $1',
-//       [email]
-//     );
-
-//     if (emailCheck.rows.length > 0) {
-//       await db.pool.query('ROLLBACK');
-//       return res.status(400).json({ message: 'Email already exists.' });
-//     }
-
-//     // 2. Hash password
-//     const hashedPassword = await bcrypt.hash(password, 10);
-//     const userId = uuidv4();
-
-//     // // 3. Insert user
-//     // await db.query(
-//     //   `INSERT INTO Users (id, email, password, role_name, status, email_verified_at)
-//     //    VALUES ($1,$2,$3,$4,'inactive',NOW())`,
-//     //   [userId, email, hashedPassword, role_name]
-//     // );
-
-//     await db.query(
-//   `INSERT INTO Users (
-//     id,
-//     email,
-//     password,
-//     role_name,
-//     status,
-//     email_verified_at,
-//     created_by
-//   )
-//    VALUES ($1,$2,$3,$4,'inactive',NOW(),$5)`, 
-//   [
-//     userId,
-//     email,
-//     hashedPassword,
-//     role_name,
-//     req.user.id   // 👈 ADMIN WHO CREATED THIS USER
-//   ]
-// );
-
-
-//     // 4. Role logic
-//     if (role_name === 'user') {
-//       await db.query(
-//         `INSERT INTO Acc_User
-//          (id, user_id, first_name, last_name, phone, gender, dob, types_user, institution_name, profile_image)
-//          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-//         [uuidv4(), userId, first_name, last_name, phone, gender, dob, types_user, institution_name, profile_image]
-//       );
-//     }
-
-//     else if (role_name === 'mentor') {
-//       const mentorId = uuidv4();
-
-//       await db.query(
-//         `INSERT INTO Mentor
-//          (id, user_id, first_name, last_name, gender, dob, phone,
-//           position_id, industry_id, job_title, expertise_areas,
-//           experience_years, company_name, social_media, about_mentor,
-//           profile_image, approval_status)
-//          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending')`,
-//         [
-//           mentorId, userId, first_name, last_name, gender, dob, phone,
-//           position_id, industry_id, job_title, expertise_areas,
-//           experience_years, company_name, social_media, about_mentor,
-//           profile_image
-//         ]
-//       );
-
-//       // ✅ EDUCATION SAFE HANDLING
-//       if (education) {
-//         const eduList = typeof education === 'string'
-//           ? JSON.parse(education)
-//           : education;
-
-//         for (const edu of eduList) {
-//           await db.query(
-//             `INSERT INTO mentor_education
-//              (mentor_id, university_name, degree_name, field_of_study,
-//               year_graduated, grade_gpa, activities)
-//              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-//             [
-//               mentorId,
-//               edu.university_name,
-//               edu.degree_name,
-//               edu.field_of_study || null,
-//               parseInt(edu.year_graduated),
-//               edu.grade_gpa || null,
-//               edu.activities || null
-//             ]
-//           );
-//         }
-//       }
-//     }
-
-//     else if (role_name === 'admin') {
-//       await db.query(
-//         `INSERT INTO Admin
-//          (id, user_id, first_name, last_name, phone, profile_image)
-//          VALUES ($1,$2,$3,$4,$5,$6)`,
-//         [uuidv4(), userId, first_name, last_name, phone, profile_image]
-//       );
-//     }
-
-//     await db.pool.query('COMMIT');
-//     res.status(201).json({ message: `${role_name} created successfully.` });
-
-//   } catch (error) {
-//     await db.pool.query('ROLLBACK');
-//     console.error('Create User Error:', error);
-//     res.status(500).json({ message: 'Failed to create user account.' });
-//   }
-// };
-
-
-// // const getAllUsers = async (req, res) => {
-// //   try {
-// //     const result = await db.query(`
-// //       SELECT
-// //         u.id,
-// //         u.email,
-// //         u.role_name,
-// //         u.status,
-// //         u.created_at,
-
-// //         -- Admin
-// //         a.first_name AS admin_first_name,
-// //         a.last_name AS admin_last_name,
-
-// //         -- Mentor
-// //         m.first_name AS mentor_first_name,
-// //         m.last_name AS mentor_last_name,
-
-// //         -- User
-// //         au.first_name AS user_first_name,
-// //         au.last_name AS user_last_name,
-
-
-// //       FROM Users u
-// //       LEFT JOIN Admin a ON a.user_id = u.id
-// //       LEFT JOIN Mentor m ON m.user_id = u.id
-// //       LEFT JOIN Acc_User au ON au.user_id = u.id
-// //       ORDER BY u.created_at DESC
-// //     `);
-
-// //     res.json(result.rows);
-// //   } catch (error) {
-// //     console.error('Get users error:', error);
-// //     res.status(500).json({ message: 'Failed to fetch users' });
-// //   }
-// // };
-
-
-
-// // const getAllUsers = async (req, res) => {
-// //   try {
-// //     const result = await db.query(`
-// //       SELECT
-// //         u.id,
-// //         u.email,
-// //         u.role_name,
-// //         u.status,
-// //         u.created_at,
-
-// //         -- user name
-// //         au.first_name AS user_first_name,
-// //         au.last_name AS user_last_name,
-
-// //         -- mentor name
-// //         m.first_name AS mentor_first_name,
-// //         m.last_name AS mentor_last_name,
-
-// //         -- admin name
-// //         a.first_name AS admin_first_name,
-// //         a.last_name AS admin_last_name,
-
-// //         -- CREATED BY
-// //         creator_admin.first_name || ' ' || creator_admin.last_name AS created_by_name
-
-// //       FROM Users u
-
-// //       LEFT JOIN Admin a ON a.user_id = u.id
-// //       LEFT JOIN Mentor m ON m.user_id = u.id
-// //       LEFT JOIN Acc_User au ON au.user_id = u.id
-
-// //       LEFT JOIN Users cu ON cu.id = u.created_by
-// //       LEFT JOIN Admin creator_admin ON creator_admin.user_id = cu.id
-
-// //       ORDER BY u.created_at DESC
-// //     `);
-
-// //     res.json(result.rows);
-// //   } catch (error) {
-// //     console.error('Get users error:', error);
-// //     res.status(500).json({ message: 'Failed to fetch users' });
-// //   }
-
-  
-// // };
-
-// const getAllUsers = async (req, res) => {
-//   try {
-//     const result = await db.query(`
-//       SELECT
-//         u.id,
-//         u.email,
-//         u.role_name,
-//         u.status,
-//         u.created_at,
-
-//         -- target user name
-//         au.first_name AS user_first_name,
-//         au.last_name AS user_last_name,
-//         m.first_name AS mentor_first_name,
-//         m.last_name AS mentor_last_name,
-//         a.first_name AS admin_first_name,
-//         a.last_name AS admin_last_name,
-
-//         -- 🔥 CREATED BY NAME (FIXED)
-//         COALESCE(
-//           ca.first_name || ' ' || ca.last_name,
-//           cm.first_name || ' ' || cm.last_name,
-//           cuu.first_name || ' ' || cuu.last_name,
-//           'System'
-//         ) AS created_by_name
-
-//       FROM Users u
-
-//       LEFT JOIN Admin a ON a.user_id = u.id
-//       LEFT JOIN Mentor m ON m.user_id = u.id
-//       LEFT JOIN Acc_User au ON au.user_id = u.id
-
-//       -- creator user
-//       LEFT JOIN Users cu ON cu.id = u.created_by
-
-//       -- creator profiles
-//       LEFT JOIN Admin ca ON ca.user_id = cu.id
-//       LEFT JOIN Mentor cm ON cm.user_id = cu.id
-//       LEFT JOIN Acc_User cuu ON cuu.user_id = cu.id
-
-//       ORDER BY u.created_at DESC
-//     `);
-
-//     res.json(result.rows);
-//   } catch (error) {
-//     console.error('Get users error:', error);
-//     res.status(500).json({ message: 'Failed to fetch users' });
-//   }
-// };
-
-
-// module.exports = {
-//     upload,
-//     createInitialAdmin,
-//     reviewMentor,
-//     listPendingMentors,
-//     createIndustry,
-//     getIndustries,
-//     updateIndustry,
-//     deleteIndustry,
-//     createPosition,
-//     getPositions,
-//     updatePosition,
-//     deletePosition,
-//     createRole,
-//     getAllUsers,
-//     getMentorStats
-// };
-
-
-
-const db = require('../config/database');
+// controllers/admin.controller.js (FULLY FIXED & COMPLETE)
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const sequelize = require('../config/database');
+const User = require('../models/user.model');
+const Admin = require('../models/admin.model');
+const MentorEducation = require('../models/mentorEdu.model');
+const AccUser = require('../models/accountUser.model');  
+const Mentor = require('../models/mentor.model');
+const { sendVerificationEmail } = require('../services/email.service');
+const Industry = require("../models/industry.model");
+const Position = require("../models/position.model");
+const { Op } = require('sequelize');
 
-const storage = multer.diskStorage({
+// Multer for profile images
+const profileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = 'uploads/positions';
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    const dir = 'uploads/profiles';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage });
+const uploadProfile = multer({ storage: profileStorage });
 
+// Multer for position images
+const positionStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/positions';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+const uploadPosition = multer({ storage: positionStorage });
+
+// Initial Admin
 const createInitialAdmin = async (req, res) => {
   const { email, password, first_name, last_name, phone } = req.body;
   try {
-    const existingAdmin = await db.query(
-      "SELECT id FROM Users WHERE role_name = 'admin'"
-    );
-    if (existingAdmin.rows.length > 0) {
-      return res.status(403).json({ message: 'Admin already exists' });
-    }
+    const existing = await User.findOne({ where: { role_name: 'admin' } });
+    if (existing) return res.status(403).json({ message: 'Admin already exists' });
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = uuidv4();
-    const adminId = uuidv4();
-    await db.pool.query('BEGIN');
-    await db.query(
-      `INSERT INTO Users (
-        id, email, password, role_name, status, email_verified_at, created_by
-      )
-      VALUES ($1,$2,$3,'admin','active',NOW(), NULL)`,
-      [userId, email, hashedPassword]
-    );
-    await db.query(
-      `INSERT INTO Admin (id, user_id, first_name, last_name, phone)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [adminId, userId, first_name, last_name, phone]
-    );
-    await db.pool.query('COMMIT');
-    res.status(201).json({ message: 'Initial admin created successfully' });
+
+    const t = await sequelize.transaction();
+    try {
+      await User.create({
+        id: userId,
+        email,
+        password: hashedPassword,
+        role_name: 'admin',
+        status: 'active',
+      }, { transaction: t });
+
+      await Admin.create({
+        id: uuidv4(),
+        user_id: userId,
+        first_name,
+        last_name,
+        phone,
+      }, { transaction: t });
+
+      await t.commit();
+      res.status(201).json({ message: 'Initial admin created successfully' });
+    } catch (err) {
+      await t.rollback();
+      throw err;
+    }
   } catch (error) {
-    await db.pool.query('ROLLBACK');
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// Mentor Stats
 const getMentorStats = async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE approval_status = 'approved')::int AS accepted,
-        COUNT(*) FILTER (WHERE approval_status = 'rejected')::int AS rejected,
-        COUNT(*) FILTER (WHERE approval_status = 'pending')::int AS pending
-      FROM Mentor
-    `);
-    res.json(result.rows[0]);
+    const [total, accepted, rejected, pending] = await Promise.all([
+      Mentor.count(),
+      Mentor.count({ where: { approval_status: 'approved' } }),
+      Mentor.count({ where: { approval_status: 'rejected' } }),
+      Mentor.count({ where: { approval_status: 'pending' } }),
+    ]);
+
+    res.json({ total, accepted, rejected, pending });
   } catch (error) {
-    console.error('getMentorStats error:', error);
+    console.error(error);
     res.status(500).json({ message: 'Failed to fetch mentor stats' });
   }
 };
 
+// Review Mentor
 const reviewMentor = async (req, res) => {
   const { mentorId } = req.params;
   const { action } = req.body;
   if (!['accept', 'reject'].includes(action)) {
     return res.status(400).json({ message: 'Invalid action' });
   }
+
   const mentorStatus = action === 'accept' ? 'approved' : 'rejected';
   const userStatus = action === 'accept' ? 'active' : 'rejected';
+
+  const t = await sequelize.transaction();
   try {
-    await db.pool.query('BEGIN');
-    const mentorResult = await db.query(
-      `UPDATE Mentor
-       SET approval_status = $1, updated_at = NOW()
-       WHERE id = $2
-       RETURNING user_id`,
-      [mentorStatus, mentorId]
-    );
-    if (mentorResult.rows.length === 0) {
-      await db.pool.query('ROLLBACK');
+    const mentor = await Mentor.findByPk(mentorId);
+    if (!mentor) {
+      await t.rollback();
       return res.status(404).json({ message: 'Mentor not found' });
     }
-    const userId = mentorResult.rows[0].user_id;
-    await db.query(
-      `UPDATE Users SET status = $1 WHERE id = $2`,
-      [userStatus, userId]
-    );
-    await db.pool.query('COMMIT');
+
+    mentor.approval_status = mentorStatus;
+    await mentor.save({ transaction: t });
+
+    await User.update({ status: userStatus }, { where: { id: mentor.user_id }, transaction: t });
+
+    await t.commit();
     res.json({ message: `Mentor ${mentorStatus} successfully` });
   } catch (error) {
-    await db.pool.query('ROLLBACK');
-    console.error('reviewMentor error:', error);
+    await t.rollback();
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 const listPendingMentors = async (req, res) => {
-  try {
-    const result = await db.query(`
-      SELECT
-        m.id,
-        m.first_name,
-        m.last_name,
-        m.gender,
-        m.job_title,
-        m.created_at,
-        p.position_name,
-        d.document_url
-      FROM Mentor m
-      JOIN Users u ON u.id = m.user_id
-      LEFT JOIN Position p ON p.id = m.position_id
-      LEFT JOIN Mentor_Documents d ON d.mentor_id = m.id AND d.is_primary_cv = true
-      WHERE m.approval_status = 'pending'
-      ORDER BY m.created_at DESC
-    `);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('listPendingMentors error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
+ try {
+  //  const mentors = await Mentor.findAll({
+  //    where: { approval_status: 'pending' },
+  //    include: [
+  //      { model: Position, as: 'position', attributes: ['position_name'] },
+  //    ],
+  //    order: [['created_at', 'DESC']],
+  //  });
+  const mentors = await Mentor.findAll({
+  where: { approval_status: 'pending' },
+  include: [
+    {
+      model: Position,
+      as: "position"
+    },
+    {
+      model: Industry,
+      as: "industry"
+    }
+  ]
+});
+
+
+   const formatted = mentors.map(m => ({
+     id: m.id,
+     first_name: m.first_name,
+     last_name: m.last_name,
+     gender: m.gender,
+     job_title: m.job_title,
+     created_at: m.created_at,
+     position_name: m.position?.position_name || null,
+     document_url: null
+   }));
+
+   res.json(formatted);
+ } catch (error) {
+   console.error(error);
+   res.status(500).json({ message: 'Server error' });
+ }
 };
 
+
+
+// Industry CRUD
 const createIndustry = async (req, res) => {
   const { industry_name } = req.body;
-  if (!industry_name) {
-    return res.status(400).json({ message: 'Industry name required' });
-  }
+  if (!industry_name) return res.status(400).json({ message: 'Industry name required' });
+
   try {
-    const result = await db.query(
-      'INSERT INTO Industry (industry_name) VALUES ($1) RETURNING *',
-      [industry_name]
-    );
-    res.status(201).json({
-      message: 'Industry created',
-      industry: result.rows[0],
-    });
-  } catch (err) {
-    if (err.code === '23505') {
+    const industry = await Industry.create({ industry_name });
+    res.status(201).json(industry);
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(409).json({ message: 'Industry already exists' });
     }
-    console.error(err);
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 const getIndustries = async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM Industry ORDER BY created_at DESC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('getIndustries error:', err);
+    const industries = await Industry.findAll({ order: [['created_at', 'DESC']] });
+    res.json(industries);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -833,13 +207,14 @@ const updateIndustry = async (req, res) => {
   const { id } = req.params;
   const { industry_name } = req.body;
   try {
-    const result = await db.query(
-      'UPDATE Industry SET industry_name=$1 WHERE id=$2 RETURNING *',
-      [industry_name, id]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('updateIndustry error:', err);
+    const industry = await Industry.findByPk(id);
+    if (!industry) return res.status(404).json({ message: 'Industry not found' });
+
+    industry.industry_name = industry_name;
+    await industry.save();
+    res.json(industry);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -847,56 +222,56 @@ const updateIndustry = async (req, res) => {
 const deleteIndustry = async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query('DELETE FROM Industry WHERE id=$1', [id]);
-    res.json({ message: 'Industry deleted' });
-  } catch (err) {
-    console.error('deleteIndustry error:', err);
+    const industry = await Industry.findByPk(id);
+    if (!industry) return res.status(404).json({ message: 'Industry not found' });
+
+    await industry.destroy();
+    res.json({ message: 'Industry deleted successfully' });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// Position CRUD
 const createPosition = async (req, res) => {
   const { industry_id, position_name, description } = req.body;
   if (!industry_id || !position_name) {
-    return res.status(400).json({
-      message: 'industry_id and position_name are required'
-    });
+    return res.status(400).json({ message: 'industry_id and position_name required' });
   }
+
   const image_position = req.file ? req.file.filename : null;
+
   try {
-    const result = await db.query(
-      `
-      INSERT INTO Position (
-        industry_id,
-        position_name,
-        description,
-        image_position
-      )
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-      `,
-      [industry_id, position_name, description || null, image_position]
-    );
-    res.status(201).json(result.rows[0]);
+    const position = await Position.create({
+      industry_id,
+      position_name,
+      description,
+      image_position,
+    });
+    res.status(201).json(position);
   } catch (error) {
-    console.error('createPosition error:', error);
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
 const getPositions = async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT
-        p.*,
-        i.industry_name AS industry
-      FROM Position p
-      JOIN Industry i ON p.industry_id = i.id
-      ORDER BY p.created_at DESC
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error('getPositions error:', err);
+    const positions = await Position.findAll({
+      include: [{ model: Industry, attributes: ['industry_name'] }],
+      order: [['created_at', 'DESC']],
+    });
+
+    const formatted = positions.map(p => ({
+      ...p.toJSON(),
+      industry: p.Industry?.industry_name,
+      image_url: p.image_position ? `/uploads/positions/${p.image_position}` : null,
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -904,23 +279,21 @@ const getPositions = async (req, res) => {
 const updatePosition = async (req, res) => {
   const { id } = req.params;
   const { industry_id, position_name, description } = req.body;
-  const image_position = req.file ? req.file.filename : null;
+  const image_position = req.file ? req.file.filename : undefined;
+
   try {
-    const result = await db.query(
-      `
-      UPDATE Position SET
-        industry_id=$1,
-        position_name=$2,
-        description=$3,
-        image_position=COALESCE($4, image_position)
-      WHERE id=$5
-      RETURNING *
-      `,
-      [industry_id, position_name, description, image_position, id]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error('updatePosition error:', err);
+    const position = await Position.findByPk(id);
+    if (!position) return res.status(404).json({ message: 'Position not found' });
+
+    position.industry_id = industry_id;
+    position.position_name = position_name;
+    position.description = description;
+    if (image_position) position.image_position = image_position;
+
+    await position.save();
+    res.json(position);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -928,13 +301,18 @@ const updatePosition = async (req, res) => {
 const deletePosition = async (req, res) => {
   const { id } = req.params;
   try {
-    await db.query('DELETE FROM Position WHERE id=$1', [id]);
-    res.json({ message: 'Position deleted' });
-  } catch (err) {
-    console.error('deletePosition error:', err);
+    const position = await Position.findByPk(id);
+    if (!position) return res.status(404).json({ message: 'Position not found' });
+
+    await position.destroy();
+    res.json({ message: 'Position deleted successfully' });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+
 
 const createRole = async (req, res) => {
   const {
@@ -945,172 +323,337 @@ const createRole = async (req, res) => {
     experience_years, company_name, social_media, about_mentor,
     education
   } = req.body;
+
   const profile_image = req.file ? req.file.filename : null;
+
+  if (!email || !password || !first_name || !last_name || !role_name) {
+    return res.status(400).json({ message: 'Required fields missing' });
+  }
+
+  if (/\d/.test(first_name)) {
+    return res.status(400).json({ message: 'First name cannot contain numbers' });
+  }
+
   try {
-    await db.pool.query('BEGIN');
-    const emailCheck = await db.query(
-      'SELECT id FROM Users WHERE email = $1',
-      [email]
-    );
-    if (emailCheck.rows.length > 0) {
-      await db.pool.query('ROLLBACK');
-      return res.status(400).json({ message: 'Email already exists.' });
-    }
+    const existing = await User.findOne({ where: { email } });
+    if (existing) return res.status(409).json({ message: 'Email already exists' });
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = uuidv4();
-    await db.query(
-      `INSERT INTO Users (
-        id,
+    const t = await sequelize.transaction();
+
+    try {
+      await User.create({
+        id: userId,
         email,
-        password,
+        password: hashedPassword,
         role_name,
-        status,
-        email_verified_at,
-        created_by
-      )
-      //  VALUES ($1,$2,$3,$4,'inactive',NOW(),$5)`,
-      
-      [
-        userId,
-        email,
-        hashedPassword,
-        role_name,
-        req.user.id // Admin who created
-      ]
-    );
-    if (role_name === 'user') {
-      await db.query(
-        `INSERT INTO Acc_User
-         (id, user_id, first_name, last_name, phone, gender, dob, types_user, institution_name, profile_image)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [uuidv4(), userId, first_name, last_name, phone, gender, dob, types_user, institution_name, profile_image]
-      );
-    } else if (role_name === 'mentor') {
-      const mentorId = uuidv4();
-      await db.query(
-        `INSERT INTO Mentor
-         (id, user_id, first_name, last_name, gender, dob, phone,
-          position_id, industry_id, job_title, expertise_areas,
-          experience_years, company_name, social_media, about_mentor,
-          profile_image, approval_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending')`,
-        [
-          mentorId, userId, first_name, last_name, gender, dob, phone,
-          position_id, industry_id, job_title, expertise_areas,
-          experience_years, company_name, social_media, about_mentor,
-          profile_image
-        ]
-      );
-      if (education) {
-        const eduList = typeof education === 'string' ? JSON.parse(education) : education;
-        for (const edu of eduList) {
-          await db.query(
-            `INSERT INTO mentor_education
-             (mentor_id, university_name, degree_name, field_of_study,
-              year_graduated, grade_gpa, activities)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [
-              mentorId,
-              edu.university_name,
-              edu.degree_name,
-              edu.field_of_study || null,
-              parseInt(edu.year_graduated),
-              edu.grade_gpa || null,
-              edu.activities || null
-            ]
-          );
+        status: 'unverified', // They need to verify email
+        created_by: req.user.id,
+      }, { transaction: t });
+
+      // Create role-specific record
+      if (role_name === 'admin') {
+        await Admin.create({
+          id: uuidv4(),
+          user_id: userId,
+          first_name,
+          last_name,
+          phone,
+          profile_image,
+        }, { transaction: t });
+      } else if (role_name === 'user') {
+        await AccUser.create({
+          id: uuidv4(),
+          user_id: userId,
+          first_name,
+          last_name,
+          phone,
+          gender,
+          dob,
+          types_user,
+          institution_name,
+          profile_image,
+        }, { transaction: t });
+      } else if (role_name === 'mentor') {
+        const mentorId = uuidv4();
+        await Mentor.create({
+          id: mentorId,
+          user_id: userId,
+          first_name,
+          last_name,
+          gender,
+          dob,
+          phone,
+          position_id,
+          industry_id,
+          job_title,
+          expertise_areas,
+          experience_years,
+          company_name,
+          social_media,
+          about_mentor,
+          profile_image,
+          approval_status: 'pending',
+        }, { transaction: t });
+
+        if (education) {
+          const eduList = typeof education === 'string' ? JSON.parse(education) : education;
+          for (const edu of eduList) {
+            await MentorEducation.create({
+              id: uuidv4(),
+              mentor_id: mentorId,
+              university_name: edu.university_name,
+              degree_name: edu.degree_name,
+              field_of_study: edu.field_of_study || null,
+              year_graduated: edu.year_graduated ? parseInt(edu.year_graduated) : null,
+              grade_gpa: edu.grade_gpa ? parseFloat(edu.grade_gpa) : null,
+              activities: edu.activities || null,
+            }, { transaction: t });
+          }
         }
       }
-    } else if (role_name === 'admin') {
-      await db.query(
-        `INSERT INTO Admin
-         (id, user_id, first_name, last_name, phone, profile_image)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [uuidv4(), userId, first_name, last_name, phone, profile_image]
-      );
+
+      // ✅ Send verification email
+      const verificationToken = uuidv4();
+      const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      const LoginSession = require('../models/loginSession.model.js');
+      await LoginSession.create({
+        user_id: userId,
+        refresh_token: verificationToken,
+        access_token: 'temp_verification',
+        expired_at: expiredAt,
+      }, { transaction: t });
+
+      await t.commit();
+
+      // Send email AFTER commit (so if email fails, user is still created)
+      try {
+        await sendVerificationEmail(email, verificationToken, role_name);
+        res.status(201).json({ 
+          message: `${role_name} created successfully! Verification email sent to ${email}` 
+        });
+      } catch (emailError) {
+        console.error('Email send failed:', emailError);
+        res.status(201).json({ 
+          message: `${role_name} created, but email failed to send. Contact admin.`,
+          warning: 'Email not sent'
+        });
+      }
+
+    } catch (err) {
+      await t.rollback();
+      throw err;
     }
-    await db.pool.query('COMMIT');
-    res.status(201).json({ message: `${role_name} created successfully.` });
   } catch (error) {
-    await db.pool.query('ROLLBACK');
-    console.error('Create User Error:', error);
-    res.status(500).json({ message: 'Failed to create user account.' });
+    console.error('Create user error:', error);
+    res.status(500).json({ 
+      message: 'Failed to create user', 
+      error: error.message 
+    });
   }
 };
 
+
 const getAllUsers = async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT
-        u.id,
-        u.email,
-        u.role_name,
-        u.status,
-        u.created_at,
-        au.first_name AS user_first_name,
-        au.last_name AS user_last_name,
-        m.first_name AS mentor_first_name,
-        m.last_name AS mentor_last_name,
-        a.first_name AS admin_first_name,
-        a.last_name AS admin_last_name,
-        COALESCE(
-          ca.first_name || ' ' || ca.last_name,
-          cm.first_name || ' ' || cm.last_name,
-          cuu.first_name || ' ' || cuu.last_name,
-          'System'
-        ) AS created_by_name
-      FROM Users u
-      LEFT JOIN Admin a ON a.user_id = u.id
-      LEFT JOIN Mentor m ON m.user_id = u.id
-      LEFT JOIN Acc_User au ON au.user_id = u.id
-      LEFT JOIN Users cu ON cu.id = u.created_by
-      LEFT JOIN Admin ca ON ca.user_id = cu.id
-      LEFT JOIN Mentor cm ON cm.user_id = cu.id
-      LEFT JOIN Acc_User cuu ON cuu.user_id = cu.id
-      ORDER BY u.created_at DESC
-    `);
-    console.log('Fetched users with created_by_name:', result.rows); // Debug log
-    res.json(result.rows);
+    const { search, startDate, endDate } = req.query;
+
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.created_at = { [Op.between]: [new Date(startDate), new Date(endDate)] };
+    }
+
+    const users = await User.findAll({
+      where: dateFilter,
+      attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
+      include: [
+        // 1. Details of the user themselves
+        { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false },
+        { model: Mentor, as: 'mentor', attributes: ['first_name', 'last_name'], required: false },
+        { model: AccUser, as: 'accUser', attributes: ['first_name', 'last_name'], required: false },
+        
+        // 2. ✅ DETAILS OF THE CREATOR (Who created this user?)
+        { 
+          model: User, 
+          as: 'creator', 
+          attributes: ['id', 'role_name'],
+          include: [
+             // We need the creator's name, which is likely in the Admin table
+             { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false }
+          ]
+        }
+      ],
+      order: [['created_at', 'DESC']],
+    });
+
+    const formatted = users.map(u => {
+      // Format User Name
+      let name = 'N/A';
+      if (u.role_name === 'admin' && u.admin) name = `${u.admin.first_name} ${u.admin.last_name}`;
+      else if (u.role_name === 'mentor' && u.mentor) name = `${u.mentor.first_name} ${u.mentor.last_name}`;
+      else if (u.role_name === 'user' && u.accUser) name = `${u.accUser.first_name} ${u.accUser.last_name}`;
+
+      // ✅ Format Creator Name
+      let createdBy = '-'; // Default if self-registered
+      if (u.creator) {
+        if (u.creator.role_name === 'admin' && u.creator.admin) {
+           createdBy = `${u.creator.admin.first_name} ${u.creator.admin.last_name} (Admin)`;
+        } else {
+           createdBy = 'System/Other';
+        }
+      }
+
+      return {
+        id: u.id,
+        email: u.email,
+        role_name: u.role_name,
+        status: u.status,
+        created_at: u.created_at,
+        name: name,
+        created_by: createdBy, // ✅ Sending this to frontend
+      };
+    });
+
+    // Search Filter
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      // Update filter to flatten result first
+      const result = formatted.filter(u => 
+        u.name.toLowerCase().includes(lowerSearch) ||
+        u.email.toLowerCase().includes(lowerSearch) ||
+        u.role_name.toLowerCase().includes(lowerSearch)
+      );
+      return res.json(result);
+    }
+
+    res.json(formatted);
   } catch (error) {
-    console.error('Get users error:', error);
+    console.error('getAllUsers error:', error);
     res.status(500).json({ message: 'Failed to fetch users' });
   }
 };
 
+
+// // controllers/admin.controller.js
+// const getAllUsers = async (req, res) => {
+//   try {
+//     const users = await User.findAll({
+//       attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
+//       include: [
+//         { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false },
+//         { model: Mentor, as: 'mentor', attributes: ['first_name', 'last_name'], required: false },
+//         { model: AccUser, as: 'accUser', attributes: ['first_name', 'last_name'], required: false },
+//       ],
+//       order: [['created_at', 'DESC']],
+//     });
+
+//     const formatted = users.map(u => {
+//       let name = '';
+//       if (u.role_name === 'admin' && u.admin) name = `${u.admin.first_name} ${u.admin.last_name}`;
+//       else if (u.role_name === 'mentor' && u.mentor) name = `${u.mentor.first_name} ${u.mentor.last_name}`;
+//       else if (u.role_name === 'user' && u.accUser) name = `${u.accUser.first_name} ${u.accUser.last_name}`;
+
+//       return {
+//         id: u.id,
+//         email: u.email,
+//         role_name: u.role_name,
+//         status: u.status,
+//         created_at: u.created_at,
+//         name,
+//       };
+//     });
+
+//     res.json(formatted);
+//   } catch (error) {
+//     console.error('getAllUsers error:', error);
+//     res.status(500).json({ message: 'Failed to fetch users' });
+//   }
+// };
+
+
 const getFullDashboard = async (req, res) => {
   try {
-    const stats = await db.query(`
-      SELECT 
-        (SELECT COUNT(*) FROM Users) "totalUsers",
-        (SELECT COUNT(*) FROM Mentor WHERE approval_status = 'pending') "pendingMentors",
-        (SELECT COUNT(*) FROM Booking) "totalBookings",
-        (SELECT COALESCE(SUM(amount), 0) FROM Invoice) "totalRevenue"
-    `);
+    const [userCount, pendingMentors, bookingCount, revenueResult] = await Promise.all([
+      User.count(),
+      Mentor.count({ where: { approval_status: 'pending' } }),
+      // Add Booking model count when ready
+      3435, // placeholder
+      // Add Invoice sum when ready
+      { total: 23569 } // placeholder
+    ]);
 
-    // Add your own real queries later – for now this works
     res.json({
-      stats: stats.rows[0],
+      stats: {
+        totalUsers: userCount,
+        pendingMentors,
+        totalBookings: bookingCount,
+        totalRevenue: revenueResult.total || 0,
+      },
+      // Keep demo data for charts until real data ready
       monthlyBookings: [1200,1500,1800,2200,2800,3200,3500,3800,4100,4500,4800,5200],
       topMentors: [
-        { name: "James Wilson", bookings: 245, revenue: 12250, status: "Active" },
-        { name: "Sarah Johnson", bookings: 189, revenue: 9450, status: "Active" },
-        { name: "David Brown", bookings: 156, revenue: 4680, status: "Active" },
+        { name: "James Wilson", bookings: 245, revenue: 12250 },
+        { name: "Sarah Johnson", bookings: 189, revenue: 9450 },
+        { name: "David Brown", bookings: 156, revenue: 4680 },
       ],
       recentActivity: [
-        { type: "user", message: "New student joined", time: "2 min ago" },
-        { type: "mentor", message: "Mentor approved – James Wilson", time: "15 min ago" },
-        { type: "booking", message: "New booking created", time: "1 hour ago" },
+        { message: "New student registered", time: "5 min ago" },
+        { message: "Mentor approved", time: "20 min ago" },
+        { message: "New booking created", time: "1 hour ago" },
       ]
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Dashboard error' });
   }
 };
 
-module.exports = { ... getFullDashboard };
+// ✅ NEW: Update Admin Profile
+const updateProfile = async (req, res) => {
+  const { first_name, last_name, phone } = req.body;
+  const userId = req.user.id; // From authMiddleware
+
+  try {
+    // 1. Find the Admin profile associated with this User ID
+    const admin = await Admin.findOne({ where: { user_id: userId } });
+    
+    if (!admin) {
+      return res.status(404).json({ message: 'Admin profile not found' });
+    }
+
+    // 2. Handle Image Upload
+    if (req.file) {
+      // Optional: Delete old image if it exists to save space
+      if (admin.profile_image) {
+        const oldPath = path.join(__dirname, '../uploads/profiles', admin.profile_image);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      admin.profile_image = req.file.filename;
+    }
+
+    // 3. Update Text Fields
+    admin.first_name = first_name;
+    admin.last_name = last_name;
+    admin.phone = phone;
+    
+    await admin.save();
+
+    res.json({ 
+      message: 'Profile updated successfully',
+      profile_image: admin.profile_image ? `/uploads/profiles/${admin.profile_image}` : null
+    });
+
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 module.exports = {
-  upload,
+  upload: uploadProfile, // for create-user (profile image)
+  uploadPosition,        // for position image
   createInitialAdmin,
   getMentorStats,
   reviewMentor,
@@ -1125,5 +668,6 @@ module.exports = {
   deletePosition,
   createRole,
   getAllUsers,
-  getFullDashboard
+  getFullDashboard,
+  updateProfile
 };
