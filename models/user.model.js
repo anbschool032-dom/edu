@@ -1,37 +1,8 @@
-// const { DataTypes } = require('sequelize');
-// const sequelize = require('../config/database');
-
-// const User = sequelize.define('User', {
-//   id: {
-//     type: DataTypes.UUID,
-//     primaryKey: true
-//   },
-//   email: DataTypes.STRING,
-//   password: DataTypes.STRING,
-//   role_name: DataTypes.STRING,
-//   status: DataTypes.STRING
-// }, {
-//   tableName: 'users',
-//   timestamps: true,
-//   createdAt: 'created_at',
-//   updatedAt: 'updated_at'
-// });
-
-// User.associate = models => {
-//   User.hasOne(models.Admin, { foreignKey: 'user_id', as: 'admin' });
-//   User.hasOne(models.Mentor, { foreignKey: 'user_id', as: 'mentor' });
-//   User.hasOne(models.AccUser, { foreignKey: 'user_id', as: 'accUser' });
-// };
-
-// module.exports = User;
-
-
 // src/models/user.model.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const User = sequelize.define('User', {
-  // ... your existing columns ...
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
@@ -41,6 +12,11 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false,
     unique: true,
+  },
+  // ✅ THIS WAS MISSING OR HIDDEN - IT MUST BE HERE
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
   },
   role_name: {
     type: DataTypes.ENUM('user', 'mentor', 'admin'),
@@ -54,21 +30,20 @@ const User = sequelize.define('User', {
     type: DataTypes.UUID,
     allowNull: true,
   },
-  // ... other columns like password, created_at, etc ...
+  // Timestamps are handled automatically by 'timestamps: true' below
 }, {
-  tableName: 'users', // Note: Check if your table is 'Users' (capital) or 'users' (lowercase) in Postgres
+  tableName: 'users', // Must match Postgres table name exactly (usually lowercase 'users')
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
 });
 
 User.associate = (db) => {
-  // Existing associations
   User.hasOne(db.Admin, { foreignKey: 'user_id', as: 'admin' });
   User.hasOne(db.Mentor, { foreignKey: 'user_id', as: 'mentor' });
   User.hasOne(db.AccUser, { foreignKey: 'user_id', as: 'accUser' });
   
-  // ✅ NEW ASSOCIATION: Self-reference for 'created_by'
+  // Self-reference for 'created_by'
   User.belongsTo(db.User, { as: 'creator', foreignKey: 'created_by' });
 };
 

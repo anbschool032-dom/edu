@@ -1,19 +1,17 @@
+// controllers/auth.controller.js
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const db = require('../models'); // Check if this path is correct for your folder structure
-// Add sendResetPasswordEmail to the list inside { }
+const db = require('../models'); 
 const { sendVerificationEmail, sendResetPasswordEmail } = require('../services/email.service');
-const PasswordReset = db.PasswordReset;
 
-// Make sure these match your exports in models/index.js
+// Models
 const User = db.User;
 const Admin = db.Admin;
 const Mentor = db.Mentor;
 const AccUser = db.AccUser;
 const LoginSession = db.LoginSession;
-
-
+const PasswordReset = db.PasswordReset;
 
 // Helper: Generate Tokens
 const generateTokens = (user) => {
@@ -25,7 +23,7 @@ const generateTokens = (user) => {
 };
 
 // ==========================================
-// 1. AUTHENTICATION FUNCTIONS (Restored)
+// 1. AUTHENTICATION FUNCTIONS 
 // ==========================================
 
 const registerMentor = async (req, res) => {
@@ -77,21 +75,33 @@ const registerMentor = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password)
-    return res.status(400).json({ message: 'Email and password required' });
-
+  
   try {
+    // 1. Find User
     const user = await User.findOne({ where: { email } });
 
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-    if (user.status !== 'active') return res.status(403).json({ message: 'Account not active' });
+    // 2. Debugging Check (You can remove this later)
+    if (!user) {
+        console.log("Login failed: User not found");
+        return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    
+    // 3. Status Check
+    if (user.status !== 'active') {
+        return res.status(403).json({ message: 'Account not active. Please verify email.' });
+    }
 
+    // 4. Password Check (This will work now because user.password exists)
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!isMatch) {
+        console.log("Login failed: Password mismatch");
+        return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
+    // 5. Generate Tokens
     const { accessToken, refreshToken } = generateTokens(user);
 
-    // Save refresh token to DB
+    // 6. Save Refresh Token
     await LoginSession.upsert({
       user_id: user.id,
       access_token: accessToken,
@@ -99,10 +109,11 @@ const login = async (req, res) => {
       expired_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     });
 
-    // Set Cookie
+    // 7. Send Response
     res.cookie('jid', refreshToken, {
       httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: process.env.NODE_ENV === 'production' // Add secure cookie in prod
     });
 
     return res.json({
@@ -177,11 +188,6 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-// ==========================================
-// 2. SETTINGS & PROFILE FUNCTIONS (Updated)
-// ==========================================
-
-// ✅ UPDATED: Returns full profile details
 const getMe = async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
@@ -195,7 +201,6 @@ const getMe = async (req, res) => {
     
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // Extract profile data based on role
     let profileData = {};
     if (user.role_name === 'admin' && user.admin) {
       profileData = user.admin.toJSON();
@@ -218,17 +223,21 @@ const getMe = async (req, res) => {
   }
 };
 
-// ✅ NEW: Update Password
 const updatePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   
   try {
+    // 1. Get User with Password
+    // IMPORTANT: Sequelize might exclude password by default depending on global scopes.
+    // To be safe, we explicitly ask for it, though usually findByPk returns all columns defined in model.
     const user = await User.findByPk(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // 2. Verify Current Password
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Incorrect current password' });
 
+    // 3. Hash New Password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
     user.last_password_change = new Date();
@@ -248,15 +257,12 @@ const forgotPassword = async (req, res) => {
   try {
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      // Security: Don't reveal if user exists. Just say email sent.
       return res.json({ message: 'If that email exists, a reset link has been sent.' });
     }
 
-    // Generate Token
     const resetToken = uuidv4();
-    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); 
 
-    // Save to DB (Handle duplicates by deleting old requests first)
     await PasswordReset.destroy({ where: { user_id: user.id } });
     await PasswordReset.create({
       user_id: user.id,
@@ -264,7 +270,6 @@ const forgotPassword = async (req, res) => {
       expires_at: expiresAt
     });
 
-    // Send Email
     await sendResetPasswordEmail(email, resetToken);
 
     res.json({ message: 'Reset link sent! Please check your email.' });
@@ -274,7 +279,6 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-// ✅ 2. Reset Password (User clicks link -> Enters new password)
 const resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
   
@@ -283,19 +287,16 @@ const resetPassword = async (req, res) => {
   }
 
   try {
-    // Find valid token
     const resetRecord = await PasswordReset.findOne({ where: { reset_token: token } });
     
     if (!resetRecord) {
       return res.status(400).json({ message: 'Invalid or expired token' });
     }
 
-    // Check expiration
     if (new Date() > new Date(resetRecord.expires_at)) {
       return res.status(400).json({ message: 'Token has expired' });
     }
 
-    // Update User Password
     const user = await User.findByPk(resetRecord.user_id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -304,7 +305,6 @@ const resetPassword = async (req, res) => {
     user.last_password_change = new Date();
     await user.save();
 
-    // Delete the used token
     await resetRecord.destroy();
 
     res.json({ message: 'Password has been reset successfully. Please login.' });
@@ -322,6 +322,6 @@ module.exports = {
   getMe, 
   verifyEmail,
   updatePassword,
-  forgotPassword ,
+  forgotPassword,
   resetPassword
 };

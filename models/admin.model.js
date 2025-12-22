@@ -52,7 +52,7 @@ const Admin = sequelize.define('Admin', {
   phone: DataTypes.STRING,
   profile_image: DataTypes.STRING,
 }, {
-  tableName: 'Admin',
+  tableName: 'admin',
   timestamps: true,
   createdAt: 'created_at',  // ✅ ADD THIS - THIS IS THE FIX!
   updatedAt: 'updated_at',  // ✅ ADD THIS - THIS IS THE FIX!

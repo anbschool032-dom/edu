@@ -60,7 +60,7 @@ const AccUser = sequelize.define('AccUser', {
   institution_name: DataTypes.STRING,
   profile_image: DataTypes.STRING,
 }, {
-  tableName: 'Acc_User',
+  tableName: 'acc_user',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',

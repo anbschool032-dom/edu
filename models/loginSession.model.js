@@ -1,25 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-
-// const LoginSession = sequelize.define('LoginSession', {
-//   user_id: {
-//     type: DataTypes.UUID,
-//     allowNull: false,
-//     references: {
-//       model: 'users',   // 👈 MUST MATCH EXACT TABLE
-//       key: 'id'
-//     }
-//   },
-//   refresh_token: DataTypes.TEXT,
-//   access_token: DataTypes.TEXT,
-//   expired_at: DataTypes.DATE
-// }, {
-//   tableName: 'Login_Session',
-//   timestamps: false
-// });
-
-
 const LoginSession = sequelize.define('LoginSession', {
   user_id: {
     type: DataTypes.UUID,
@@ -34,7 +15,7 @@ const LoginSession = sequelize.define('LoginSession', {
   access_token: DataTypes.TEXT,
   expired_at: DataTypes.DATE
 }, {
-  tableName: 'Login_Session',
+  tableName: 'login_session',
   timestamps: false,
   freezeTableName: true
 });
