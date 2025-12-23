@@ -3,7 +3,7 @@ name: Deploy Backend
 on:
   push:
     branches:
-      - main  # ⚠️ សំខាន់: ពិនិត្យមើលថា Branch បងឈ្មោះ main ឬ master?
+      - adminServer  # ⚠️ សំខាន់: ពិនិត្យមើលថា Branch បងឈ្មោះ main ឬ master?
 
 jobs:
   deploy:
