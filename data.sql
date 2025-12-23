@@ -197,7 +197,7 @@ FOREIGN KEY (created_by) REFERENCES Users (id);
     price decimal(10,2) NOT NULL,
     agenda_pdf varchar(255),
     location_name varchar(255) NOT NULL,
-    location_map_url text NOT NULL,
+    location_map_url text NOT NULL, 
     is_available boolean DEFAULT true,
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
