@@ -1,4 +1,5 @@
 // controllers/admin.controller.js (FULLY FIXED & COMPLETE)
+const { sendTelegramNotification } = require('../services/telegram.service');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
@@ -10,7 +11,7 @@ const Admin = require('../models/admin.model');
 const MentorEducation = require('../models/mentorEdu.model');
 const AccUser = require('../models/accountUser.model');  
 const Mentor = require('../models/mentor.model');
-const { sendVerificationEmail } = require('../services/email.service');
+const { sendVerificationEmail,sendMentorApprovalEmail, sendMentorRejectionEmail,sendResetPasswordEmail } = require('../services/email.service');
 const Industry = require("../models/industry.model");
 const Position = require("../models/position.model");
 const { Op } = require('sequelize');
@@ -99,19 +100,91 @@ const getMentorStats = async (req, res) => {
 };
 
 // Review Mentor
+// const reviewMentor = async (req, res) => {
+//   const { mentorId } = req.params;
+//   const { action } = req.body; // 'accept' or 'reject'
+  
+//   if (!['accept', 'reject'].includes(action)) {
+//     return res.status(400).json({ message: 'Invalid action' });
+//   }
+
+//   const mentorStatus = action === 'accept' ? 'approved' : 'rejected';
+//   // បើ reject យើងអត់ដាក់ user status ជា rejected ទេ (ទុកវា active តែ mentor rejected) ឬតាមចិត្តបង
+//   // តែជាទូទៅបើ Approve -> Active. បើ Reject -> Rejected/Inactive.
+//   const userStatus = action === 'accept' ? 'active' : 'inactive'; 
+
+//   const t = await sequelize.transaction();
+//   try {
+//     // 1. រកមើល Mentor ព្រមទាំងទាញយក Email ពី User មកជាមួយ
+//     const mentor = await Mentor.findByPk(mentorId, {
+//         include: [{ model: User, as: 'user' }] // សំខាន់ណាស់! ត្រូវយក User ដើម្បីបាន Email
+//     });
+
+//     if (!mentor) {
+//       await t.rollback();
+//       return res.status(404).json({ message: 'Mentor not found' });
+//     }
+
+//     // 2. Update Status ក្នុង DB
+//     mentor.approval_status = mentorStatus;
+//     await mentor.save({ transaction: t });
+
+//     // Update User status (Active / Inactive)
+//     if (mentor.user) {
+//         mentor.user.status = userStatus;
+//         await mentor.user.save({ transaction: t });
+//     }
+
+//     await t.commit(); // Save ចូល DB ជោគជ័យសិន ចាំផ្ញើ Email
+
+//     // 3. 🔥 ផ្ញើ Email ជូនដំណឹង (Send Notification Email)
+//     // យើងដាក់ក្នុង try-catch ដាច់ដោយឡែក ដើម្បីកុំអោយការផ្ញើ Email បរាជ័យ ធ្វើអោយ Transaction ខាងលើខូច
+//     try {
+//         const userEmail = mentor.user ? mentor.user.email : null;
+        
+//         if (userEmail) {
+//             if (action === 'accept') {
+//                 await sendMentorApprovalEmail(userEmail, mentor.first_name);
+//                 console.log(`Approval email sent to ${userEmail}`);
+//             } else {
+//                 await sendMentorRejectionEmail(userEmail, mentor.first_name);
+//                 console.log(`Rejection email sent to ${userEmail}`);
+//             }
+//         }
+//     } catch (emailError) {
+//         console.error("Failed to send notification email:", emailError);
+//         // មិនបាច់ throw error ទេ គ្រាន់តែ log ទុក ព្រោះការ approve ក្នុង DB ជោគជ័យហើយ
+//     }
+
+//     res.json({ message: `Mentor ${mentorStatus} successfully and email notification sent.` });
+
+//   } catch (error) {
+//     await t.rollback();
+//     console.error(error);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+// នៅក្នុង controllers/admin.controller.js
+
 const reviewMentor = async (req, res) => {
   const { mentorId } = req.params;
-  const { action } = req.body;
+  const { action } = req.body; 
+  
   if (!['accept', 'reject'].includes(action)) {
     return res.status(400).json({ message: 'Invalid action' });
   }
 
   const mentorStatus = action === 'accept' ? 'approved' : 'rejected';
-  const userStatus = action === 'accept' ? 'active' : 'rejected';
+  const userStatus = action === 'accept' ? 'active' : 'inactive'; 
 
   const t = await sequelize.transaction();
   try {
-    const mentor = await Mentor.findByPk(mentorId);
+    // 1. កែត្រង់នេះ! (ដក as: 'user' ចេញ)
+    const mentor = await Mentor.findByPk(mentorId, {
+        include: [{ model: User }] // 👈 ទុកតែ model: User បានហើយ (Sequelize នឹងស្គាល់ថា User)
+    });
+
     if (!mentor) {
       await t.rollback();
       return res.status(404).json({ message: 'Mentor not found' });
@@ -120,16 +193,41 @@ const reviewMentor = async (req, res) => {
     mentor.approval_status = mentorStatus;
     await mentor.save({ transaction: t });
 
-    await User.update({ status: userStatus }, { where: { id: mentor.user_id }, transaction: t });
+    // 2. កែត្រង់នេះដែរ! (ប្តូរ mentor.user ទៅ mentor.User - អក្សរធំ)
+    // ព្រោះពេលយើងអត់ដាក់ alias, Sequelize យកឈ្មោះ Model មកប្រើ (User)
+    if (mentor.User) {
+        mentor.User.status = userStatus;
+        await mentor.User.save({ transaction: t });
+    }
 
-    await t.commit();
-    res.json({ message: `Mentor ${mentorStatus} successfully` });
+    await t.commit(); 
+
+    // 3. ផ្ញើ Email (កែ mentor.user ទៅ mentor.User ដែរ)
+    try {
+        const userEmail = mentor.User ? mentor.User.email : null; // 👈 mentor.User
+        
+        if (userEmail) {
+            if (action === 'accept') {
+                await sendMentorApprovalEmail(userEmail, mentor.first_name);
+                console.log(`Approval email sent to ${userEmail}`);
+            } else {
+                await sendMentorRejectionEmail(userEmail, mentor.first_name);
+                console.log(`Rejection email sent to ${userEmail}`);
+            }
+        }
+    } catch (emailError) {
+        console.error("Failed to send notification email:", emailError);
+    }
+
+    res.json({ message: `Mentor ${mentorStatus} successfully and email notification sent.` });
+
   } catch (error) {
     await t.rollback();
     console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 
 const listPendingMentors = async (req, res) => {
@@ -312,8 +410,6 @@ const deletePosition = async (req, res) => {
   }
 };
 
-
-
 const createRole = async (req, res) => {
   const {
     email, password, role_name,
@@ -348,7 +444,7 @@ const createRole = async (req, res) => {
         email,
         password: hashedPassword,
         role_name,
-        status: 'unverified', // They need to verify email
+        status: 'unverified',
         created_by: req.user.id,
       }, { transaction: t });
 
@@ -414,7 +510,7 @@ const createRole = async (req, res) => {
         }
       }
 
-      // ✅ Send verification email
+      // Create Verification Token
       const verificationToken = uuidv4();
       const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       
@@ -426,9 +522,49 @@ const createRole = async (req, res) => {
         expired_at: expiredAt,
       }, { transaction: t });
 
+      // ✅ Commit Transaction (ទិន្នន័យចូល DB ជោគជ័យហើយ)
       await t.commit();
 
-      // Send email AFTER commit (so if email fails, user is still created)
+      // ============================================================
+      // 🔥 SEND TELEGRAM NOTIFICATION (ដាក់នៅទីនេះ!)
+      // ============================================================
+      try {
+        // ១. រកឈ្មោះអ្នកបង្កើត (យក Email របស់ Admin បច្ចុប្បន្ន)
+        const creatorName = req.user ? req.user.email : 'System/Admin';
+
+        // ២. រៀបចំទិន្នន័យទាំងអស់ដែលត្រូវផ្ញើ
+        const telegramData = {
+           first_name, 
+           last_name, 
+           email, 
+           phone, 
+           gender,
+           role_name,
+           
+           // សម្រាប់ User (Student)
+           types_user, 
+           institution_name, 
+           
+           // សម្រាប់ Mentor
+           company_name,
+           job_title,
+           expertise_areas,
+           
+           status: 'Unverified'
+        };
+
+        // ៣. ហៅ Service
+        // (ចំណាំ: យើងមិនប្រើ await ទេ ដើម្បីកុំអោយ User រង់ចាំយូរពេក ទុកអោយវាធ្វើការនៅ Background)
+        sendTelegramNotification(telegramData, creatorName);
+        
+      } catch (tgError) {
+        console.error("❌ Telegram Notification Error:", tgError.message);
+        // យើងមិន throw error ទេ ដើម្បីកុំអោយខូច process បង្កើត user
+      }
+      // ============================================================
+
+
+      // Send email verification
       try {
         await sendVerificationEmail(email, verificationToken, role_name);
         res.status(201).json({ 
@@ -443,6 +579,7 @@ const createRole = async (req, res) => {
       }
 
     } catch (err) {
+      // បើមានបញ្ហា DB -> Rollback
       await t.rollback();
       throw err;
     }
@@ -456,84 +593,224 @@ const createRole = async (req, res) => {
 };
 
 
-const getAllUsers = async (req, res) => {
-  try {
-    const { search, startDate, endDate } = req.query;
+// const createRole = async (req, res) => {
+//   const {
+//     email, password, role_name,
+//     first_name, last_name, phone, gender, dob,
+//     types_user, institution_name,
+//     position_id, industry_id, job_title, expertise_areas,
+//     experience_years, company_name, social_media, about_mentor,
+//     education
+//   } = req.body;
 
-    let dateFilter = {};
-    if (startDate && endDate) {
-      dateFilter.created_at = { [Op.between]: [new Date(startDate), new Date(endDate)] };
-    }
+//   const profile_image = req.file ? req.file.filename : null;
 
-    const users = await User.findAll({
-      where: dateFilter,
-      attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
-      include: [
-        // 1. Details of the user themselves
-        { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false },
-        { model: Mentor, as: 'mentor', attributes: ['first_name', 'last_name'], required: false },
-        { model: AccUser, as: 'accUser', attributes: ['first_name', 'last_name'], required: false },
+//   if (!email || !password || !first_name || !last_name || !role_name) {
+//     return res.status(400).json({ message: 'Required fields missing' });
+//   }
+
+//   if (/\d/.test(first_name)) {
+//     return res.status(400).json({ message: 'First name cannot contain numbers' });
+//   }
+
+//   try {
+//     const existing = await User.findOne({ where: { email } });
+//     if (existing) return res.status(409).json({ message: 'Email already exists' });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     const userId = uuidv4();
+//     const t = await sequelize.transaction();
+
+//     try {
+//       await User.create({
+//         id: userId,
+//         email,
+//         password: hashedPassword,
+//         role_name,
+//         status: 'unverified', // They need to verify email
+//         created_by: req.user.id,
+//       }, { transaction: t });
+
+//       // Create role-specific record
+//       if (role_name === 'admin') {
+//         await Admin.create({
+//           id: uuidv4(),
+//           user_id: userId,
+//           first_name,
+//           last_name,
+//           phone,
+//           profile_image,
+//         }, { transaction: t });
+//       } else if (role_name === 'user') {
+//         await AccUser.create({
+//           id: uuidv4(),
+//           user_id: userId,
+//           first_name,
+//           last_name,
+//           phone,
+//           gender,
+//           dob,
+//           types_user,
+//           institution_name,
+//           profile_image,
+//         }, { transaction: t });
+//       } else if (role_name === 'mentor') {
+//         const mentorId = uuidv4();
+//         await Mentor.create({
+//           id: mentorId,
+//           user_id: userId,
+//           first_name,
+//           last_name,
+//           gender,
+//           dob,
+//           phone,
+//           position_id,
+//           industry_id,
+//           job_title,
+//           expertise_areas,
+//           experience_years,
+//           company_name,
+//           social_media,
+//           about_mentor,
+//           profile_image,
+//           approval_status: 'pending',
+//         }, { transaction: t });
+
+//         if (education) {
+//           const eduList = typeof education === 'string' ? JSON.parse(education) : education;
+//           for (const edu of eduList) {
+//             await MentorEducation.create({
+//               id: uuidv4(),
+//               mentor_id: mentorId,
+//               university_name: edu.university_name,
+//               degree_name: edu.degree_name,
+//               field_of_study: edu.field_of_study || null,
+//               year_graduated: edu.year_graduated ? parseInt(edu.year_graduated) : null,
+//               grade_gpa: edu.grade_gpa ? parseFloat(edu.grade_gpa) : null,
+//               activities: edu.activities || null,
+//             }, { transaction: t });
+//           }
+//         }
+//       }
+
+//       // ✅ Send verification email
+//       const verificationToken = uuidv4();
+//       const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+//       const LoginSession = require('../models/loginSession.model.js');
+//       await LoginSession.create({
+//         user_id: userId,
+//         refresh_token: verificationToken,
+//         access_token: 'temp_verification',
+//         expired_at: expiredAt,
+//       }, { transaction: t });
+
+//       await t.commit();
+
+//       // Send email AFTER commit (so if email fails, user is still created)
+//       try {
+//         await sendVerificationEmail(email, verificationToken, role_name);
+//         res.status(201).json({ 
+//           message: `${role_name} created successfully! Verification email sent to ${email}` 
+//         });
+//       } catch (emailError) {
+//         console.error('Email send failed:', emailError);
+//         res.status(201).json({ 
+//           message: `${role_name} created, but email failed to send. Contact admin.`,
+//           warning: 'Email not sent'
+//         });
+//       }
+
+//     } catch (err) {
+//       await t.rollback();
+//       throw err;
+//     }
+//   } catch (error) {
+//     console.error('Create user error:', error);
+//     res.status(500).json({ 
+//       message: 'Failed to create user', 
+//       error: error.message 
+//     });
+//   }
+// };
+
+//   try {
+//     const { search, startDate, endDate } = req.query;
+
+//     let dateFilter = {};
+//     if (startDate && endDate) {
+//       dateFilter.created_at = { [Op.between]: [new Date(startDate), new Date(endDate)] };
+//     }
+
+//     const users = await User.findAll({
+//       where: dateFilter,
+//       attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
+//       include: [
+//         // 1. Details of the user themselves
+//         { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false },
+//         { model: Mentor, as: 'mentor', attributes: ['first_name', 'last_name'], required: false },
+//         { model: AccUser, as: 'accUser', attributes: ['first_name', 'last_name'], required: false },
         
-        // 2. ✅ DETAILS OF THE CREATOR (Who created this user?)
-        { 
-          model: User, 
-          as: 'creator', 
-          attributes: ['id', 'role_name'],
-          include: [
-             // We need the creator's name, which is likely in the Admin table
-             { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false }
-          ]
-        }
-      ],
-      order: [['created_at', 'DESC']],
-    });
+//         // 2. ✅ DETAILS OF THE CREATOR (Who created this user?)
+//         { 
+//           model: User, 
+//           as: 'creator', 
+//           attributes: ['id', 'role_name'],
+//           include: [
+//              // We need the creator's name, which is likely in the Admin table
+//              { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false }
+//           ]
+//         }
+//       ],
+//       order: [['created_at', 'DESC']],
+//     });
 
-    const formatted = users.map(u => {
-      // Format User Name
-      let name = 'N/A';
-      if (u.role_name === 'admin' && u.admin) name = `${u.admin.first_name} ${u.admin.last_name}`;
-      else if (u.role_name === 'mentor' && u.mentor) name = `${u.mentor.first_name} ${u.mentor.last_name}`;
-      else if (u.role_name === 'user' && u.accUser) name = `${u.accUser.first_name} ${u.accUser.last_name}`;
+//     const formatted = users.map(u => {
+//       // Format User Name
+//       let name = 'N/A';
+//       if (u.role_name === 'admin' && u.admin) name = `${u.admin.first_name} ${u.admin.last_name}`;
+//       else if (u.role_name === 'mentor' && u.mentor) name = `${u.mentor.first_name} ${u.mentor.last_name}`;
+//       else if (u.role_name === 'user' && u.accUser) name = `${u.accUser.first_name} ${u.accUser.last_name}`;
 
-      // ✅ Format Creator Name
-      let createdBy = '-'; // Default if self-registered
-      if (u.creator) {
-        if (u.creator.role_name === 'admin' && u.creator.admin) {
-           createdBy = `${u.creator.admin.first_name} ${u.creator.admin.last_name} (Admin)`;
-        } else {
-           createdBy = 'System/Other';
-        }
-      }
+//       // ✅ Format Creator Name
+//       let createdBy = '-'; // Default if self-registered
+//       if (u.creator) {
+//         if (u.creator.role_name === 'admin' && u.creator.admin) {
+//            createdBy = `${u.creator.admin.first_name} ${u.creator.admin.last_name} (Admin)`;
+//         } else {
+//            createdBy = 'System/Other';
+//         }
+//       }
 
-      return {
-        id: u.id,
-        email: u.email,
-        role_name: u.role_name,
-        status: u.status,
-        created_at: u.created_at,
-        name: name,
-        created_by: createdBy, // ✅ Sending this to frontend
-      };
-    });
+//       return {
+//         id: u.id,
+//         email: u.email,
+//         role_name: u.role_name,
+//         status: u.status,
+//         created_at: u.created_at,
+//         name: name,
+//         created_by: createdBy, // ✅ Sending this to frontend
+//       };
+//     });
 
-    // Search Filter
-    if (search) {
-      const lowerSearch = search.toLowerCase();
-      // Update filter to flatten result first
-      const result = formatted.filter(u => 
-        u.name.toLowerCase().includes(lowerSearch) ||
-        u.email.toLowerCase().includes(lowerSearch) ||
-        u.role_name.toLowerCase().includes(lowerSearch)
-      );
-      return res.json(result);
-    }
+//     // Search Filter
+//     if (search) {
+//       const lowerSearch = search.toLowerCase();
+//       // Update filter to flatten result first
+//       const result = formatted.filter(u => 
+//         u.name.toLowerCase().includes(lowerSearch) ||
+//         u.email.toLowerCase().includes(lowerSearch) ||
+//         u.role_name.toLowerCase().includes(lowerSearch)
+//       );
+//       return res.json(result);
+//     }
 
-    res.json(formatted);
-  } catch (error) {
-    console.error('getAllUsers error:', error);
-    res.status(500).json({ message: 'Failed to fetch users' });
-  }
-};
+//     res.json(formatted);
+//   } catch (error) {
+//     console.error('getAllUsers error:', error);
+//     res.status(500).json({ message: 'Failed to fetch users' });
+//   }
+// };
 
 
 // // controllers/admin.controller.js
@@ -571,6 +848,93 @@ const getAllUsers = async (req, res) => {
 //     res.status(500).json({ message: 'Failed to fetch users' });
 //   }
 // };
+
+// controllers/admin.controller.js
+
+const getAllUsers = async (req, res) => {
+  try {
+    const { search, startDate, endDate } = req.query;
+
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.created_at = { [Op.between]: [new Date(startDate), new Date(endDate)] };
+    }
+
+    const users = await User.findAll({
+      where: dateFilter,
+      attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
+      include: [
+        // 1. ព័ត៌មាន User ផ្ទាល់ (ត្រូវដាក់ alias ដូចដើមវិញ)
+        { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false },
+        { model: Mentor, as: 'mentor', attributes: ['first_name', 'last_name'], required: false },
+        { model: AccUser, as: 'accUser', attributes: ['first_name', 'last_name'], required: false },
+        
+        // 2. ព័ត៌មានអ្នកបង្កើត (Creator)
+        { 
+          model: User, 
+          as: 'creator', 
+          attributes: ['id', 'email', 'role_name'],
+          include: [
+             // អ្នកបង្កើតក៏ជា User ដែរ ដូច្នេះត្រូវហៅ Admin តាម alias 'admin' ដូចគ្នា
+             { model: Admin, as: 'admin', attributes: ['first_name', 'last_name'], required: false }
+          ]
+        }
+      ],
+      order: [['created_at', 'DESC']],
+    });
+
+    const formatted = users.map(u => {
+      // A. រៀបចំឈ្មោះរបស់ User ខ្លួនឯង
+      let name = 'N/A';
+      // ដោយសារដាក់ alias វិញ, យើងហៅតាមឈ្មោះ alias (អក្សរតូច)
+      if (u.role_name === 'admin' && u.admin) name = `${u.admin.first_name} ${u.admin.last_name}`;
+      else if (u.role_name === 'mentor' && u.mentor) name = `${u.mentor.first_name} ${u.mentor.last_name}`;
+      else if (u.role_name === 'user' && u.accUser) name = `${u.accUser.first_name} ${u.accUser.last_name}`;
+
+      // B. ✅ រៀបចំឈ្មោះរបស់អ្នកបង្កើត (Created By)
+      let createdBy = 'Self-Registered'; 
+
+      if (u.creator) {
+        // បើអ្នកបង្កើតជា Admin ហើយមានឈ្មោះ
+        if (u.creator.admin) { 
+           const adminProfile = u.creator.admin;
+           createdBy = `${adminProfile.first_name} ${adminProfile.last_name} (Admin)`;
+        } 
+        // បើអត់មានឈ្មោះ (យក Email)
+        else {
+           createdBy = u.creator.email;
+        }
+      }
+
+      return {
+        id: u.id,
+        email: u.email,
+        role_name: u.role_name,
+        status: u.status,
+        created_at: u.created_at,
+        name: name,
+        created_by: createdBy, 
+      };
+    });
+
+    // Search Filter
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      const result = formatted.filter(u => 
+        u.name.toLowerCase().includes(lowerSearch) ||
+        u.email.toLowerCase().includes(lowerSearch) ||
+        u.role_name.toLowerCase().includes(lowerSearch) ||
+        u.created_by.toLowerCase().includes(lowerSearch)
+      );
+      return res.json(result);
+    }
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('getAllUsers error:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
 
 
 const getFullDashboard = async (req, res) => {

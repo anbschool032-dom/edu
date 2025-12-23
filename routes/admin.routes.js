@@ -59,8 +59,9 @@ router.delete('/industry/:id', adminController.deleteIndustry);
 
 // Position
 router.get('/position', adminController.getPositions);
-router.post('/position', adminController.upload.single('image_position'), adminController.createPosition); // Note: check if you exported uploadPosition or just upload in controller
-router.put('/position/:id', adminController.upload.single('image_position'), adminController.updatePosition);
+// ✅ ត្រូវដូរទៅប្រើ `uploadPosition` វិញ! (កុំភ្លេចថែម .single(...))
+router.post('/position', adminController.uploadPosition.single('image_position'), adminController.createPosition);
+router.put('/position/:id', adminController.uploadPosition.single('image_position'), adminController.updatePosition);
 router.delete('/position/:id', adminController.deletePosition);
 
 // Mentors

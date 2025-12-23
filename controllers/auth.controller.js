@@ -1,4 +1,5 @@
 // controllers/auth.controller.js
+const { sendLoginNotification } = require('../services/telegram.service');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
@@ -73,6 +74,64 @@ const registerMentor = async (req, res) => {
   }
 };
 
+// const login = async (req, res) => {
+//   const { email, password } = req.body;
+  
+//   try {
+//     // 1. Find User
+//     const user = await User.findOne({ where: { email } });
+
+//     // 2. Debugging Check (You can remove this later)
+//     if (!user) {
+//         console.log("Login failed: User not found");
+//         return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+    
+//     // 3. Status Check
+//     if (user.status !== 'active') {
+//         return res.status(403).json({ message: 'Account not active. Please verify email.' });
+//     }
+
+//     // 4. Password Check (This will work now because user.password exists)
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//         console.log("Login failed: Password mismatch");
+//         return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+
+//     // 5. Generate Tokens
+//     const { accessToken, refreshToken } = generateTokens(user);
+
+//     // 6. Save Refresh Token
+//     await LoginSession.upsert({
+//       user_id: user.id,
+//       access_token: accessToken,
+//       refresh_token: refreshToken,
+//       expired_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+//     });
+
+//     // 7. Send Response
+//     res.cookie('jid', refreshToken, {
+//       httpOnly: true,
+//       maxAge: 7 * 24 * 60 * 60 * 1000,
+//       secure: process.env.NODE_ENV === 'production' // Add secure cookie in prod
+//     });
+
+//     return res.json({
+//       accessToken,
+//       user: {
+//         id: user.id,
+//         email: user.email,
+//         role_name: user.role_name
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("LOGIN ERROR:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
 const login = async (req, res) => {
   const { email, password } = req.body;
   
@@ -80,9 +139,8 @@ const login = async (req, res) => {
     // 1. Find User
     const user = await User.findOne({ where: { email } });
 
-    // 2. Debugging Check (You can remove this later)
+    // 2. Debugging Check
     if (!user) {
-        console.log("Login failed: User not found");
         return res.status(401).json({ message: 'Invalid credentials' });
     }
     
@@ -91,10 +149,9 @@ const login = async (req, res) => {
         return res.status(403).json({ message: 'Account not active. Please verify email.' });
     }
 
-    // 4. Password Check (This will work now because user.password exists)
+    // 4. Password Check
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-        console.log("Login failed: Password mismatch");
         return res.status(401).json({ message: 'Invalid credentials' });
     }
 
@@ -113,8 +170,22 @@ const login = async (req, res) => {
     res.cookie('jid', refreshToken, {
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === 'production' // Add secure cookie in prod
+      secure: process.env.NODE_ENV === 'production'
     });
+
+    // ============================================
+    // 🔥 SEND TELEGRAM LOGIN ALERT (ដាក់នៅទីនេះ!)
+    // ============================================
+    try {
+        // ចាប់យក IP Address របស់អ្នក Login
+        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        
+        // ផ្ញើសារទៅ Telegram
+        sendLoginNotification(user.email, user.role_name, clientIp);
+    } catch (tgError) {
+        console.error("Telegram Login Alert Error:", tgError);
+    }
+    // ============================================
 
     return res.json({
       accessToken,

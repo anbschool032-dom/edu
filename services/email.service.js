@@ -166,8 +166,62 @@ const sendResetPasswordEmail = async (email, token) => {
   await sendMail(email, 'Reset your CareerSync Password', html, `Reset password: ${resetLink}`);
 };
 
+
+const sendMentorApprovalEmail = async (toEmail, firstName) => {
+  const loginUrl = `${process.env.FRONTEND_URL}/login`; // Link ទៅកាន់ Login Page
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: toEmail,
+    subject: '🎉 Congratulations! Your Mentor Application is Approved - CareerSync',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+        <h2 style="color: #4F46E5; text-align: center;">Welcome to CareerSync!</h2>
+        <p>Dear ${firstName},</p>
+        <p>We are pleased to inform you that your application to become a Mentor has been <strong>APPROVED</strong>!</p>
+        <p>You can now log in to your dashboard and start guiding students.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${loginUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+            Login to Your Account
+          </a>
+        </div>
+
+        <p>If the button doesn't work, copy this link: <br> <a href="${loginUrl}">${loginUrl}</a></p>
+        <p>Best Regards,<br>The CareerSync Team</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+// 2. Email សម្រាប់ពេល Admin REJECT Mentor
+const sendMentorRejectionEmail = async (toEmail, firstName) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: toEmail,
+    subject: 'Update on Your Mentor Application - CareerSync',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+        <h2 style="color: #EF4444; text-align: center;">Application Status</h2>
+        <p>Dear ${firstName},</p>
+        <p>Thank you for your interest in becoming a mentor at CareerSync.</p>
+        <p>After carefully reviewing your application, we regret to inform you that we are unable to approve your mentor profile at this time.</p>
+        <p>If you have any questions or believe this is a mistake, please reply to this email.</p>
+        
+        <p>Best Regards,<br>The CareerSync Team</p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
 module.exports = {
   sendVerificationEmail,
   sendResetPasswordEmail, // ✅ Exporting with the correct name
+  sendMentorApprovalEmail, // 👈 ថ្មី
+  sendMentorRejectionEmail,
   transporter,
 };
