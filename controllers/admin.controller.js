@@ -986,9 +986,22 @@ const getUserDetails = async (req, res) => {
   }
 };
 
-// ✅ FIXED: deleteUser
+
+// adminController.js (ឬ userController.js របស់បង)
+
 const deleteUser = async (req, res) => {
   const { id } = req.params;
+
+  // 🛡️ SECURITY CHECK: យក ID របស់ Admin ដែលកំពុង Login មកផ្ទៀងផ្ទាត់
+  // (req.user មកពី Middleware verifyToken)
+  const requesterId = req.user ? req.user.id : null;
+
+  // 🛑 1. ហាមលុបខ្លួនឯង (Self-Delete Protection)
+  if (requesterId && parseInt(id) === parseInt(requesterId)) {
+    return res.status(403).json({ message: "Security Alert: You cannot delete your own account!" });
+  }
+
+  // ចាប់ផ្តើម Transaction (ដើម្បីធានាថា បើលុបដាច់ គឺដាច់ទាំងអស់ បើ Error គឺត្រឡប់មកវិញទាំងអស់)
   const t = await sequelize.transaction();
 
   try {
@@ -998,35 +1011,57 @@ const deleteUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // 1. Delete Role Specific Data first
+    // 🛑 2. ការពារ Admin លុប Admin ផ្សេងទៀត (Admin Safety)
     if (user.role_name === 'admin') {
-      await Admin.destroy({ where: { user_id: id }, transaction: t });
-    } else if (user.role_name === 'mentor') {
+        // បើបងចង់ឱ្យ Super Admin លុបបាន ត្រូវថែមលក្ខខណ្ឌនៅត្រង់នេះ
+        // ប៉ុន្តែសម្រាប់សុវត្ថិភាពទូទៅ យើងហាមឃាត់សិន
+        await t.rollback();
+        return res.status(403).json({ message: "Access Denied: You cannot delete another Admin account. Please deactivate them instead." });
+    }
+
+    // ✅ 3. លុបព័ត៌មានតាម Role (Role-Specific Data)
+    if (user.role_name === 'mentor') {
       const mentor = await Mentor.findOne({ where: { user_id: id } });
       if (mentor) {
+        // លុបការសិក្សា និងជំនាញរបស់ Mentor ជាមុន
         await MentorEducation.destroy({ where: { mentor_id: mentor.id }, transaction: t });
         await Mentor.destroy({ where: { user_id: id }, transaction: t });
       }
     } else if (user.role_name === 'user') {
+      // លុបព័ត៌មានសិស្ស
       await AccUser.destroy({ where: { user_id: id }, transaction: t });
     }
 
-    // 🔧 FIX: Uncomment this to delete login sessions first
+    // ✅ 4. លុប Login Sessions (សំខាន់! ដើម្បីឱ្យគេ Logout ភ្លាម)
     await LoginSession.destroy({ where: { user_id: id }, transaction: t });
 
-    // 3. Delete the Main User Account
+    // ✅ 5. ចុងក្រោយ លុប User ធំចេញពី Table Users
     await user.destroy({ transaction: t });
 
+    // ជោគជ័យ! Commit ការផ្លាស់ប្តូរ
     await t.commit();
     res.json({ message: 'User deleted successfully' });
+
   } catch (error) {
+    // មានបញ្ហា! Rollback មកដូចដើមវិញ
     await t.rollback();
     console.error('Delete user error:', error);
-    // Send a clearer error message
+
+    // ពិនិត្យមើលថាជាបញ្ហា Foreign Key ឬអត់ (ឧ. User នេះធ្លាប់បង្កើតអ្នកផ្សេង)
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+        return res.status(400).json({ 
+            message: 'Cannot delete: This user is linked to other critical data (e.g., they created other users or invoices).' 
+        });
+    }
+
     res.status(500).json({ message: 'Failed to delete user: ' + error.message });
   }
 };
 
+module.exports = {
+    // ... function ផ្សេងៗ ...
+    deleteUser
+};
 
 module.exports = {
   upload: uploadProfile, // for create-user (profile image)
