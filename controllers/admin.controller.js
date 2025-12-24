@@ -15,6 +15,7 @@ const { sendVerificationEmail,sendMentorApprovalEmail, sendMentorRejectionEmail,
 const Industry = require("../models/industry.model");
 const Position = require("../models/position.model");
 const { Op } = require('sequelize');
+const LoginSession = require('../models/loginSession.model');
 
 // Multer for profile images
 const profileStorage = multer.diskStorage({
@@ -28,6 +29,8 @@ const profileStorage = multer.diskStorage({
   }
 });
 const uploadProfile = multer({ storage: profileStorage });
+
+
 
 // Multer for position images
 const positionStorage = multer.diskStorage({
@@ -98,75 +101,6 @@ const getMentorStats = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch mentor stats' });
   }
 };
-
-// Review Mentor
-// const reviewMentor = async (req, res) => {
-//   const { mentorId } = req.params;
-//   const { action } = req.body; // 'accept' or 'reject'
-  
-//   if (!['accept', 'reject'].includes(action)) {
-//     return res.status(400).json({ message: 'Invalid action' });
-//   }
-
-//   const mentorStatus = action === 'accept' ? 'approved' : 'rejected';
-//   // បើ reject យើងអត់ដាក់ user status ជា rejected ទេ (ទុកវា active តែ mentor rejected) ឬតាមចិត្តបង
-//   // តែជាទូទៅបើ Approve -> Active. បើ Reject -> Rejected/Inactive.
-//   const userStatus = action === 'accept' ? 'active' : 'inactive'; 
-
-//   const t = await sequelize.transaction();
-//   try {
-//     // 1. រកមើល Mentor ព្រមទាំងទាញយក Email ពី User មកជាមួយ
-//     const mentor = await Mentor.findByPk(mentorId, {
-//         include: [{ model: User, as: 'user' }] // សំខាន់ណាស់! ត្រូវយក User ដើម្បីបាន Email
-//     });
-
-//     if (!mentor) {
-//       await t.rollback();
-//       return res.status(404).json({ message: 'Mentor not found' });
-//     }
-
-//     // 2. Update Status ក្នុង DB
-//     mentor.approval_status = mentorStatus;
-//     await mentor.save({ transaction: t });
-
-//     // Update User status (Active / Inactive)
-//     if (mentor.user) {
-//         mentor.user.status = userStatus;
-//         await mentor.user.save({ transaction: t });
-//     }
-
-//     await t.commit(); // Save ចូល DB ជោគជ័យសិន ចាំផ្ញើ Email
-
-//     // 3. 🔥 ផ្ញើ Email ជូនដំណឹង (Send Notification Email)
-//     // យើងដាក់ក្នុង try-catch ដាច់ដោយឡែក ដើម្បីកុំអោយការផ្ញើ Email បរាជ័យ ធ្វើអោយ Transaction ខាងលើខូច
-//     try {
-//         const userEmail = mentor.user ? mentor.user.email : null;
-        
-//         if (userEmail) {
-//             if (action === 'accept') {
-//                 await sendMentorApprovalEmail(userEmail, mentor.first_name);
-//                 console.log(`Approval email sent to ${userEmail}`);
-//             } else {
-//                 await sendMentorRejectionEmail(userEmail, mentor.first_name);
-//                 console.log(`Rejection email sent to ${userEmail}`);
-//             }
-//         }
-//     } catch (emailError) {
-//         console.error("Failed to send notification email:", emailError);
-//         // មិនបាច់ throw error ទេ គ្រាន់តែ log ទុក ព្រោះការ approve ក្នុង DB ជោគជ័យហើយ
-//     }
-
-//     res.json({ message: `Mentor ${mentorStatus} successfully and email notification sent.` });
-
-//   } catch (error) {
-//     await t.rollback();
-//     console.error(error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-// នៅក្នុង controllers/admin.controller.js
-
 const reviewMentor = async (req, res) => {
   const { mentorId } = req.params;
   const { action } = req.body; 
@@ -974,30 +908,35 @@ const getFullDashboard = async (req, res) => {
   }
 };
 
-// ✅ NEW: Update Admin Profile
+// 1. Update Admin Profile (FIXED)
 const updateProfile = async (req, res) => {
   const { first_name, last_name, phone } = req.body;
-  const userId = req.user.id; // From authMiddleware
+  const userId = req.user.id; 
 
   try {
-    // 1. Find the Admin profile associated with this User ID
     const admin = await Admin.findOne({ where: { user_id: userId } });
     
     if (!admin) {
       return res.status(404).json({ message: 'Admin profile not found' });
     }
 
-    // 2. Handle Image Upload
+    // Handle Image Upload
     if (req.file) {
-      // Optional: Delete old image if it exists to save space
+      // ✅ FIX: លុបរូបចាស់ដោយប្រើ process.cwd()
       if (admin.profile_image) {
-        const oldPath = path.join(__dirname, '../uploads/profiles', admin.profile_image);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+        const oldPath = path.join(process.cwd(), 'uploads/profiles', admin.profile_image);
+        if (fs.existsSync(oldPath)) {
+            try {
+                fs.unlinkSync(oldPath);
+            } catch (err) {
+                console.error("Could not delete old image:", err);
+            }
+        }
       }
       admin.profile_image = req.file.filename;
     }
 
-    // 3. Update Text Fields
+    // Update Text Fields
     admin.first_name = first_name;
     admin.last_name = last_name;
     admin.phone = phone;
@@ -1006,6 +945,7 @@ const updateProfile = async (req, res) => {
 
     res.json({ 
       message: 'Profile updated successfully',
+      // Return path ដែលចាប់ផ្តើមដោយ /uploads/...
       profile_image: admin.profile_image ? `/uploads/profiles/${admin.profile_image}` : null
     });
 
@@ -1014,6 +954,79 @@ const updateProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// ✅ FIXED: getUserDetails
+const getUserDetails = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findByPk(id, {
+      attributes: ['id', 'email', 'role_name', 'status', 'created_at'],
+      include: [
+        { model: Admin, as: 'admin' },
+        { 
+          model: Mentor, 
+          as: 'mentor',
+          include: [
+            // 🔧 FIX: Changed 'educations' to 'education' to match your model alias
+            { model: MentorEducation, as: 'education' }, 
+            { model: Position, as: 'position' },
+            { model: Industry, as: 'industry' }
+          ]
+        },
+        { model: AccUser, as: 'accUser' }
+      ]
+    });
+
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Get user details error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// ✅ FIXED: deleteUser
+const deleteUser = async (req, res) => {
+  const { id } = req.params;
+  const t = await sequelize.transaction();
+
+  try {
+    const user = await User.findByPk(id);
+    if (!user) {
+      await t.rollback();
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 1. Delete Role Specific Data first
+    if (user.role_name === 'admin') {
+      await Admin.destroy({ where: { user_id: id }, transaction: t });
+    } else if (user.role_name === 'mentor') {
+      const mentor = await Mentor.findOne({ where: { user_id: id } });
+      if (mentor) {
+        await MentorEducation.destroy({ where: { mentor_id: mentor.id }, transaction: t });
+        await Mentor.destroy({ where: { user_id: id }, transaction: t });
+      }
+    } else if (user.role_name === 'user') {
+      await AccUser.destroy({ where: { user_id: id }, transaction: t });
+    }
+
+    // 🔧 FIX: Uncomment this to delete login sessions first
+    await LoginSession.destroy({ where: { user_id: id }, transaction: t });
+
+    // 3. Delete the Main User Account
+    await user.destroy({ transaction: t });
+
+    await t.commit();
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    await t.rollback();
+    console.error('Delete user error:', error);
+    // Send a clearer error message
+    res.status(500).json({ message: 'Failed to delete user: ' + error.message });
+  }
+};
+
 
 module.exports = {
   upload: uploadProfile, // for create-user (profile image)
@@ -1033,5 +1046,7 @@ module.exports = {
   createRole,
   getAllUsers,
   getFullDashboard,
-  updateProfile
+  updateProfile,
+  getUserDetails,
+  deleteUser,
 };
