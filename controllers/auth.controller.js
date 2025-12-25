@@ -74,7 +74,7 @@ const registerMentor = async (req, res) => {
   }
 };
 
-// const login = async (req, res) => {
+
 //   const { email, password } = req.body;
   
 //   try {
@@ -132,12 +132,94 @@ const registerMentor = async (req, res) => {
 //   }
 // };
 
+// const login = async (req, res) => {
+//   const { email, password } = req.body;
+  
+//   try {
+//     // 1. Find User
+//     const user = await User.findOne({ where: { email } });
+
+//     // 2. Debugging Check
+//     if (!user) {
+//         return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+    
+//     // 3. Status Check
+//     if (user.status !== 'active') {
+//         return res.status(403).json({ message: 'Account not active. Please verify email.' });
+//     }
+
+//     // 4. Password Check
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//         return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+
+//     // 5. Generate Tokens
+//     const { accessToken, refreshToken } = generateTokens(user);
+
+//     // 6. Save Refresh Token
+//     await LoginSession.upsert({
+//       user_id: user.id,
+//       access_token: accessToken,
+//       refresh_token: refreshToken,
+//       expired_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+//     });
+
+//     // 7. Send Response
+//     res.cookie('jid', refreshToken, {
+//       httpOnly: true,
+//       maxAge: 7 * 24 * 60 * 60 * 1000,
+//       secure: process.env.NODE_ENV === 'production'
+//     });
+
+//     // ============================================
+//     // 🔥 SEND TELEGRAM LOGIN ALERT (ដាក់នៅទីនេះ!)
+//     // ============================================
+//     try {
+//         // ចាប់យក IP Address របស់អ្នក Login
+//         const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        
+//         // ផ្ញើសារទៅ Telegram
+//         // sendLoginNotification(user.email, user.role_name, clientIp);
+//         sendLoginNotification(user, req, accessToken);
+//     } catch (tgError) {
+//         console.error("Telegram Login Alert Error:", tgError);
+//     }
+//     // ============================================
+
+//     return res.json({
+//       accessToken,
+//       user: {
+//         id: user.id,
+//         email: user.email,
+//         role_name: user.role_name
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("LOGIN ERROR:", err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+// ==========================================
+// UPDATED LOGIN FUNCTION
+// ==========================================
 const login = async (req, res) => {
   const { email, password } = req.body;
   
   try {
-    // 1. Find User
-    const user = await User.findOne({ where: { email } });
+    // 1. Find User AND Include Profile Data (Admin/Mentor/Student)
+    // 🔥 THIS IS THE CRITICAL FIX 🔥
+    const user = await User.findOne({ 
+      where: { email },
+      include: [
+        { model: Admin, as: 'admin', required: false },
+        { model: Mentor, as: 'mentor', required: false },
+        { model: AccUser, as: 'accUser', required: false }
+      ]
+    });
 
     // 2. Debugging Check
     if (!user) {
@@ -174,14 +256,12 @@ const login = async (req, res) => {
     });
 
     // ============================================
-    // 🔥 SEND TELEGRAM LOGIN ALERT (ដាក់នៅទីនេះ!)
+    // 🔥 SEND TELEGRAM LOGIN ALERT
     // ============================================
     try {
-        // ចាប់យក IP Address របស់អ្នក Login
-        const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        
-        // ផ្ញើសារទៅ Telegram
-        sendLoginNotification(user.email, user.role_name, clientIp);
+        // Now 'user' contains .admin, .mentor, or .accUser data
+        // so the service can extract the Name and Phone correctly!
+        await sendLoginNotification(user, req, accessToken);
     } catch (tgError) {
         console.error("Telegram Login Alert Error:", tgError);
     }
@@ -201,6 +281,7 @@ const login = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 const refreshToken = async (req, res) => {
   const token = req.cookies?.jid;
