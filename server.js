@@ -53,8 +53,7 @@ app.use('/api/v1/mentors', mentorRoutes);
 // ជាធម្មតា Vite ប្រើ 'dist', CRA ប្រើ 'build'។ ខ្ញុំដាក់ 'dist' ជាឧទាហរណ៍។
 // ទីតាំង '../client/dist' គឺសន្មតថា folder `client` នៅក្បែរ folder `server`។
 
-// កែពី '../client/dist' ទៅជា '../clientadmin2/dist' (ឬឈ្មោះ folder frontend របស់បងនៅលើ Server)
-const frontendPath = path.join(__dirname, '../clientadmin2/dist');
+const frontendPath = path.join(__dirname, '../frontend/dist');
 
 // បើមាន folder frontend, ឱ្យ Express យកមកប្រើ
 if (fs.existsSync(frontendPath)) {
