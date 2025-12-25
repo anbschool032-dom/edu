@@ -62,11 +62,12 @@ if (fs.existsSync(frontendPath)) {
   // 1. បម្រើឯកសារ Static (css, js, images របស់ React)
   app.use(express.static(frontendPath));
 
-  // 2. Catch-All Route (សម្រាប់ React Router)
-  // មានន័យថា បើគេហៅ Route ណាក្រៅពី /api/... ឱ្យបោះ index.html ទៅឱ្យគេ
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
+// ✅ កូដថ្មី (ដាក់បែបនេះវិញ)
+app.get(/(.*)/, (req, res) => {
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
+
+
 } else {
   console.log('⚠️ Warning: Could not find React build folder at:', frontendPath);
   console.log('👉 Please run "npm run build" in your client folder first.');
