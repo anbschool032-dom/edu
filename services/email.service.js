@@ -50,10 +50,13 @@ const sendVerificationEmail = async (email, token, role = 'user') => {
   await sendMail(email, 'Verify your CareerSync account', html, `Verify your email: ${verifyUrl}`);
 };
 
-// ✅ Renamed to match your controller: sendResetPasswordEmail
+// services/email.service.js
+
 const sendResetPasswordEmail = async (email, token) => {
-  // Point to your FRONTEND URL (Admin or Public depending on need, defaulting to 5173 here)
-  const base = 'http://localhost:5173'; 
+  // ✅ កែសម្រួល៖ ប្រើ Environment Variable ជំនួសឱ្យ Hardcoded localhost
+  // ប្រសិនបើអត់មានក្នុង .env ទេ ទើបវាប្រើ localhost ជា fallback
+  const base = process.env.CLIENT_BASE_URL_ADMIN || 'http://localhost:5173'; 
+  
   const resetLink = `${base}/reset-password?token=${token}`;
   
   const html = `
@@ -73,7 +76,6 @@ const sendResetPasswordEmail = async (email, token) => {
   
   await sendMail(email, 'Reset your CareerSync Password', html, `Reset password: ${resetLink}`);
 };
-
 
 const sendMentorApprovalEmail = async (toEmail, firstName) => {
   const loginUrl = `${process.env.FRONTEND_URL}/login`; // Link ទៅកាន់ Login Page
