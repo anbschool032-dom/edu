@@ -6,6 +6,7 @@ const fs = require('fs');
 require('dotenv').config();
 const sequelize = require('./config/database');
 
+// Import Routes
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
 const mentorRoutes = require('./routes/mentor.routes');
@@ -13,7 +14,9 @@ const mentorRoutes = require('./routes/mentor.routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
+// ==========================================
+// 🔥 1. CORS CONFIGURATION
+// ==========================================
 app.use(cors({
   origin: [
     'http://localhost:5173', 
@@ -27,26 +30,39 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization']
 }));
 
-
+// Middlewares
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // ==========================================
-// 📂 2. UPLOADS HANDLING (The Fix & Auto Create)
+// 📂 2. UPLOADS HANDLING (FIXED & SAFE)
 // ==========================================
-const uploadPath = path.join(process.cwd(), 'uploads');
 
-// A. បង្កើត Folder ស្វ័យប្រវត្តិ (ការពារក្រែងលោ Server ថ្មីអត់ទាន់មាន)
+// ✅ FIX: ប្រើ __dirname ដើម្បីឱ្យវាស្គាល់ទីតាំងពិតប្រាកដ (ការពារបញ្ហា PM2 នៅលើ Server)
+const uploadPath = path.join(__dirname, 'uploads');
+const profilePath = path.join(uploadPath, 'profiles');
+const positionPath = path.join(uploadPath, 'positions');
+
+// 1. បង្កើត Root Folder (uploads)
 if (!fs.existsSync(uploadPath)) {
   fs.mkdirSync(uploadPath, { recursive: true });
-  console.log('✅ Created uploads folder automatically');
+  console.log('✅ Created uploads root folder');
 }
 
-// B. បើកឱ្យចូលតាមរយៈ /uploads (Standard Link)
-app.use('/uploads', express.static(uploadPath));
+// 2. 🔥 បង្កើត Sub-folders ដោយស្វ័យប្រវត្តិ (ការពារ Error ពេល Upload)
+if (!fs.existsSync(profilePath)) {
+  fs.mkdirSync(profilePath, { recursive: true });
+  console.log('✅ Created uploads/profiles folder');
+}
 
-// C. ✅ Fix សំខាន់៖ បើកឱ្យចូលតាមរយៈ /api/v1/uploads (សម្រាប់ Position Images ដែល Error)
+if (!fs.existsSync(positionPath)) {
+  fs.mkdirSync(positionPath, { recursive: true });
+  console.log('✅ Created uploads/positions folder');
+}
+
+// 3. បើក Public Access សម្រាប់រូបភាព
+app.use('/uploads', express.static(uploadPath));
 app.use('/api/v1/uploads', express.static(uploadPath));
 
 console.log('📂 Serving static files from:', uploadPath);
@@ -58,7 +74,9 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/mentors', mentorRoutes);
 
-
+// ==========================================
+// ⚛️ 4. FRONTEND SERVING (React)
+// ==========================================
 const frontendPath = path.join(__dirname, '../frontend/dist');
 
 if (fs.existsSync(frontendPath)) {
@@ -67,10 +85,8 @@ if (fs.existsSync(frontendPath)) {
   // បម្រើឯកសារ Static (css, js, images របស់ React)
   app.use(express.static(frontendPath));
 
-
-
   // Handle SPA (Single Page Application)
-  // ✅ FIX: ប្រើ Regex /(.*)/ ជំនួសឱ្យ '*' ឬ '/*' ដើម្បីដោះស្រាយ PathError
+  // ✅ FIX: ប្រើ Regex /(.*)/ ដើម្បីការពារ PathError លើ Server (Express ថ្មី)
   app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
@@ -96,8 +112,6 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log('✅ DB connected (no sync)');
     
-    // ចំណាំ៖ យើងបានបង្កើត folder uploads នៅខាងលើរួចហើយ មិនបាច់ដាក់ក្នុងនេះទៀតទេ
-
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
     });
