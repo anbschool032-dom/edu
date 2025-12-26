@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 const sequelize = require('./config/database');
-// Import Routes
+
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');
 const mentorRoutes = require('./routes/mentor.routes');
@@ -13,9 +13,7 @@ const mentorRoutes = require('./routes/mentor.routes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ==========================================
-// 🔥 1. កែ CORS (អនុញ្ញាតឱ្យចូលពី Domain ទាំងនេះ)
-// ==========================================
+
 app.use(cors({
   origin: [
     'http://localhost:5173', 
@@ -29,7 +27,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization']
 }));
 
-// Middlewares
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
@@ -60,12 +58,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/mentors', mentorRoutes);
 
-// ==========================================
-// ⚛️ 4. FRONTEND SERVING (React)
-// ==========================================
 
-// ⚠️ ចំណាំ៖ សូមប្តូរ '../frontend/dist' ទៅជាឈ្មោះ Folder ពិតប្រាកដរបស់អ្នក 
-// (ឧទាហរណ៍៖ '../clientadmin2/dist' បើ Folder ឈ្មោះ clientadmin2)
 const frontendPath = path.join(__dirname, '../frontend/dist');
 
 if (fs.existsSync(frontendPath)) {
@@ -75,7 +68,8 @@ if (fs.existsSync(frontendPath)) {
   app.use(express.static(frontendPath));
 
   // Handle SPA (Single Page Application) - រាល់ Route ផ្សេងទៀតរត់ទៅ index.html
-  app.get('*', (req, res) => {
+// Handle SPA (Single Page Application) - Fix for PathError
+  app.get('/*', (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 
