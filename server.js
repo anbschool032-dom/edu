@@ -67,9 +67,11 @@ if (fs.existsSync(frontendPath)) {
   // បម្រើឯកសារ Static (css, js, images របស់ React)
   app.use(express.static(frontendPath));
 
-  // Handle SPA (Single Page Application) - រាល់ Route ផ្សេងទៀតរត់ទៅ index.html
-// Handle SPA (Single Page Application) - Fix for PathError
-  app.get('/*', (req, res) => {
+
+
+  // Handle SPA (Single Page Application)
+  // ✅ FIX: ប្រើ Regex /(.*)/ ជំនួសឱ្យ '*' ឬ '/*' ដើម្បីដោះស្រាយ PathError
+  app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 
