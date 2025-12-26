@@ -87,57 +87,6 @@ const sendTelegramNotification = async (data, creatorName) => {
 
 
 
-
-// // ==========================================
-// // 1️⃣ Function: សម្រាប់ User ថ្មី (New User Alert)
-// // ==========================================
-// const sendTelegramNotification = async (data, creatorName) => {
-//   try {
-//     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CREATE_USER_CHAT_ID) {
-//       console.warn("⚠️ Telegram Token or Chat ID is missing for Create User");
-//       return;
-//     }
-
-//     const date = new Date().toLocaleDateString('en-GB');
-//     const fullName = `${data.first_name} ${data.last_name}`;
-//     const role = data.role_name ? data.role_name.toUpperCase() : 'UNKNOWN';
-    
-//     let extraInfo = '';
-//     if (data.role_name === 'user') {
-//         extraInfo = `\n🏫 Institution: ${data.institution_name || '-'}\n🎓 Type: ${data.types_user || '-'}`;
-//     } else if (data.role_name === 'mentor') {
-//         extraInfo = `\n🏢 Company: ${data.company_name || '-'}\n💼 Job Title: ${data.job_title || '-'}\n🌟 Expertise: ${data.expertise_areas || '-'}`;
-//     } else if (data.role_name === 'admin') {
-//         extraInfo = `\n📱 Admin Phone: ${data.phone || '-'}`;
-//     }
-
-//     const message = `
-// 🚀 <b>New User Created!</b>
-// ━━━━━━━━━━━━━━━
-// 📅 Date: ${date}
-// 👤 Name: <b>${fullName}</b>
-// 📧 Email: ${data.email}
-// 📞 Phone: ${data.phone || '-'}
-// 🚻 Gender: ${data.gender || '-'}
-// 🏷 Role: <b>${role}</b>${extraInfo}
-// ━━━━━━━━━━━━━━━
-// 🛠 Created By: ${creatorName || 'System'}
-//     `;
-
-//     await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-//       chat_id: TELEGRAM_CREATE_USER_CHAT_ID,
-//       text: message,
-//       parse_mode: 'HTML'
-//     });
-//     console.log('✅ Create User Notification sent!');
-//   } catch (error) {
-//     console.error('❌ Failed to send Telegram message:', error.message);
-//   }
-// };
-
-
-
-
 // ==========================================
 // 2️⃣ Function: សម្រាប់ Login (FIXED NAME & PHONE) 🔥
 // ==========================================
