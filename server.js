@@ -39,18 +39,19 @@ app.use(cookieParser());
 // 📂 2. UPLOADS HANDLING (FIXED & SAFE)
 // ==========================================
 
-// ✅ FIX: ប្រើ __dirname ដើម្បីឱ្យវាស្គាល់ទីតាំងពិតប្រាកដ (ការពារបញ្ហា PM2 នៅលើ Server)
+// ✅ FIX 1: Use __dirname instead of process.cwd()
+// This ensures the server finds the folder even when run by PM2 from root.
 const uploadPath = path.join(__dirname, 'uploads');
 const profilePath = path.join(uploadPath, 'profiles');
 const positionPath = path.join(uploadPath, 'positions');
 
-// 1. បង្កើត Root Folder (uploads)
+// 1. Create Root Folder
 if (!fs.existsSync(uploadPath)) {
   fs.mkdirSync(uploadPath, { recursive: true });
   console.log('✅ Created uploads root folder');
 }
 
-// 2. 🔥 បង្កើត Sub-folders ដោយស្វ័យប្រវត្តិ (ការពារ Error ពេល Upload)
+// 2. Create Sub-folders (Prevents Upload Errors)
 if (!fs.existsSync(profilePath)) {
   fs.mkdirSync(profilePath, { recursive: true });
   console.log('✅ Created uploads/profiles folder');
@@ -61,7 +62,8 @@ if (!fs.existsSync(positionPath)) {
   console.log('✅ Created uploads/positions folder');
 }
 
-// 3. បើក Public Access សម្រាប់រូបភាព
+// 3. Serve Static Files
+// This allows the frontend to access http://domain/uploads/profiles/image.jpg
 app.use('/uploads', express.static(uploadPath));
 app.use('/api/v1/uploads', express.static(uploadPath));
 
@@ -82,11 +84,12 @@ const frontendPath = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendPath)) {
   console.log('✅ Found React build folder:', frontendPath);
   
-  // បម្រើឯកសារ Static (css, js, images របស់ React)
+  // Serve React Static Files
   app.use(express.static(frontendPath));
 
   // Handle SPA (Single Page Application)
-  // ✅ FIX: ប្រើ Regex /(.*)/ ដើម្បីការពារ PathError លើ Server (Express ថ្មី)
+  // ✅ FIX 2: Use Regex /(.*)/ instead of '*'
+  // This fixes the "PathError: Missing parameter name" in your PM2 logs
   app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
